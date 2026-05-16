@@ -1,12 +1,11 @@
 import json
 import shutil
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import List
 from uuid import uuid4
-from datetime import datetime, UTC
-from fastapi import UploadFile
 
-from system.guards import check_id
+from fastapi import UploadFile
 
 
 def create_job(file: UploadFile, emails: List[str] | None):
@@ -53,13 +52,21 @@ def get_result(job_id: str):
             job = json.load(f)
     except FileNotFoundError:
         return {'job_id': job_id, "status": "failed", "error": "Job not found"}
-    artifacts = job["artifacts"]
+    if job["status"] != "done":
+        return {"job_id": job_id, "status": job["status"]}
     transcript_path: Path = job_path / "transcript.txt"
     summary_path: Path = job_path / "summary.txt"
-    if str(transcript_path) not in artifacts or str(summary_path) not in artifacts:
-        return {"job_id": job_id, "status": job["status"]}
     with transcript_path.open(mode='r', encoding='UTF-8') as f:
         transcript = f.read()
     with summary_path.open(mode='r', encoding='UTF-8') as f:
         summary = f.read()
     return {"job_id": job_id, "status": job["status"], "transcript": transcript, "summary": summary}
+
+
+def process_job(job_id: str):
+    job_path: Path = Path(f"output/{job_id}")
+    with open(job_path / "job.json", mode='r', encoding='UTF-8') as f:
+        job = json.load(f)
+    job["status"] = "done"
+    with open(job_path / "job.json", mode='w', encoding='UTF-8') as f:
+        json.dump(job, f)

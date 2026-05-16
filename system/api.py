@@ -1,9 +1,9 @@
 from typing import Annotated, List
 
-from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
+from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, BackgroundTasks
 
 from system.guards import equal_api_key, check_file, check_and_parse_emails, check_id
-from system.job_store import create_job, get_status, get_result
+from system.job_store import create_job, get_status, get_result, process_job
 
 app = FastAPI()
 
@@ -17,13 +17,14 @@ def health():
     return {"status": "ok"}
 
 @app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
-def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()]):
+def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()], background_tasks: BackgroundTasks):
     if not check_file(file):
         raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = create_job(file, emails_list)
     if resp["status"] == "failed":
         raise HTTPException(status_code=507, detail=resp)
+    background_tasks.add_task(process_job, job_id=resp["job_id"])
     return resp
 
 @app.get("/v1/jobs/{job_id}", dependencies=[Depends(check_api_key)])
@@ -43,3 +44,4 @@ def get_result_api(job_id: str):
     if resp["status"] != "done":
         raise HTTPException(status_code=409, detail=resp)
     return resp
+
