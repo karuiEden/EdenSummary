@@ -1,14 +1,15 @@
+import hmac
 from pathlib import Path
 
 from email_validator import validate_email, EmailNotValidError
 from fastapi import UploadFile
+from pydantic import UUID4
 
-from config import X_API_KEY
-from system.config import audio_formats
+from system.config import audio_formats, X_API_KEY
 
 
 def equal_api_key(in_api_key: str):
-    return in_api_key == X_API_KEY
+    return hmac.compare_digest(in_api_key, X_API_KEY)
 
 def check_file(file: UploadFile):
     file_ext = Path(str(file.filename)).suffix.lower()
@@ -28,3 +29,10 @@ def check_and_parse_emails(emails_str: str | None):
     if not emails:
         return None
     return emails
+
+def check_id(job_id: str):
+    try:
+        UUID4(job_id)
+        return True
+    except ValueError:
+        return False

@@ -6,6 +6,8 @@ from uuid import uuid4
 from datetime import datetime, UTC
 from fastapi import UploadFile
 
+from system.guards import check_id
+
 
 def create_job(file: UploadFile, emails: List[str] | None):
     job_id: str = str(uuid4())
@@ -36,6 +38,8 @@ def create_job(file: UploadFile, emails: List[str] | None):
     return {"status": "queued", "job_id": job_id}
 
 def get_status(job_id: str):
+    if not check_id(job_id):
+        return None
     job_path: Path = Path(f"output/{job_id}")
     try:
         with open(job_path / "job.json", mode='r', encoding='UTF-8') as f:
@@ -45,6 +49,8 @@ def get_status(job_id: str):
         return {"job_id": job_id, "status": "failed", "error": "Job not found"}
 
 def get_result(job_id: str):
+    if not check_id(job_id):
+        return None
     job_path: Path = Path(f"output/{job_id}")
     try:
         with open(job_path / "job.json", mode='r', encoding='UTF-8') as f:

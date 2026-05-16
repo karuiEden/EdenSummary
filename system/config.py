@@ -1,5 +1,6 @@
+import os
 
-X_API_KEY = "12312"
+X_API_KEY = os.getenv("X_API_KEY")
 
 audio_formats = {
     ".mp3": "audio/mpeg",

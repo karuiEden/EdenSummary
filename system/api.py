@@ -12,11 +12,11 @@ def check_api_key(api_key: Annotated[str | None, Header()]):
         raise HTTPException(status_code=401)
 
 
-@app.get("/health", dependencies=Depends(check_api_key))
+@app.get("/health", dependencies=[Depends(check_api_key)])
 def health():
     return {"status": "ok"}
 
-@app.post("/v1/jobs", dependencies=Depends(check_api_key), status_code=202)
+@app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
 def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()]):
     if not check_file(file):
         raise HTTPException(status_code=415)
@@ -26,16 +26,20 @@ def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()]):
         raise HTTPException(status_code=507, detail=resp)
     return resp
 
-@app.get("/v1/jobs/{job_id}", dependencies=Depends(check_api_key))
+@app.get("/v1/jobs/{job_id}", dependencies=[Depends(check_api_key)])
 def check_status_api(job_id: str):
     resp = get_status(job_id)
+    if resp is None:
+        raise HTTPException(status_code=400)
     if resp["status"] == "failed":
         raise HTTPException(status_code=404, detail=resp)
     return resp
 
-@app.get("/v1/jobs/{job_id}/result", dependencies=Depends(check_api_key))
+@app.get("/v1/jobs/{job_id}/result", dependencies=[Depends(check_api_key)])
 def get_result_api(job_id: str):
     resp = get_result(job_id)
+    if resp is None:
+        raise HTTPException(status_code=400)
     if resp["status"] != "done":
         raise HTTPException(status_code=409, detail=resp)
     return resp
