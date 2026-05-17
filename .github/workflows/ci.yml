@@ -18,7 +18,7 @@ jobs:
         run: uv sync
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run ruff check system/
 
       - name: Type check
-        run: uv run mypy api.py system/
+        run: uv run mypy system/

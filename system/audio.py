@@ -12,5 +12,5 @@ def get_duration(path: Path) -> float:
     res = subprocess.run(
         ["ffprobe", '-i', str(path), '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0'], capture_output=True, check=True
     )
-    duration = float(res.stdout)
+    duration = float(res.stdout.decode().strip())
     return duration

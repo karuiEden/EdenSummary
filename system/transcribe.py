@@ -3,14 +3,9 @@ from pathlib import Path
 from typing import List
 
 from faster_whisper import WhisperModel
+from faster_whisper.transcribe import Segment
 
 from system.config import WhisperConfig
-
-@dataclass(frozen=True)
-class Segment:
-    start: float
-    end: float
-    text: str
 
 
 
@@ -24,7 +19,7 @@ def chunk_segments(segments: List[Segment], max_chars: int) -> List[str]:
     chunk = ''
     chunks = []
     for segment in segments:
-        chunk += segment
+        chunk += segment.text
         if len(chunk) >= max_chars:
             chunks.append(chunk)
             chunk = ''
