@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated, List
 
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, BackgroundTasks
@@ -5,6 +6,8 @@ from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, B
 from system.guards import equal_api_key, check_file, check_and_parse_emails, check_id
 from system.job_store import create_job, get_status, get_result
 from system.pipeline import process_job
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
