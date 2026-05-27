@@ -19,7 +19,7 @@ audio_formats = {
 
 class WhisperConfig(BaseSettings):
     model: str = Field(default='large-v3', validation_alias='WHISPER_MODEL')
-    lang: str = Field(default='ru', validation_alias='WHISPER_LANGUAGE')
+    lang: str | None = Field(default=None, validation_alias='WHISPER_LANGUAGE')
     device: str = Field(default='auto', validation_alias='WHISPER_DEVICE')
     compute_type: str = Field(default='auto' ,validation_alias='WHISPER_COMPUTE_TYPE')
     chunk_max_chars: int = Field(default=4000, validation_alias='MAX_CHARS')
