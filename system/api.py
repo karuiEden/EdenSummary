@@ -3,7 +3,8 @@ from typing import Annotated, List
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, BackgroundTasks
 
 from system.guards import equal_api_key, check_file, check_and_parse_emails, check_id
-from system.job_store import create_job, get_status, get_result, process_job
+from system.job_store import create_job, get_status, get_result
+from system.pipeline import process_job
 
 app = FastAPI()
 

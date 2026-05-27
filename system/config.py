@@ -1,7 +1,9 @@
-from dataclasses import dataclass
 import os
+from functools import lru_cache
 
 from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
@@ -15,18 +17,48 @@ audio_formats = {
     ".m4a": "audio/mp4",
 }
 
-@dataclass(frozen=True)
-class WhisperConfig:
-    model: str
-    lang: str
-    device: str
-    compute_type: str
+class WhisperConfig(BaseSettings):
+    model: str = Field(default='large-v3', validation_alias='WHISPER_MODEL')
+    lang: str = Field(default='ru', validation_alias='WHISPER_LANGUAGE')
+    device: str = Field(default='auto', validation_alias='WHISPER_DEVICE')
+    compute_type: str = Field(default='auto' ,validation_alias='WHISPER_COMPUTE_TYPE')
+    chunk_max_chars: int = Field(default=4000, validation_alias='MAX_CHARS')
+    model_config = SettingsConfigDict(env_file='.env')
 
-    @classmethod
-    def from_env(cls):
-        return cls(
-            model = os.getenv('WHISPER_MODEL', 'large-v3'),
-            lang = os.getenv('WHISPER_LANGUAGE', 'ru'),
-            device = os.getenv('WHISPER_DEVICE', 'auto'),
-            compute_type = os.getenv('WHISPER_COMPUTE_TYPE', 'auto')
-        )
+
+class LLMConfig(BaseSettings):
+    model: str = Field(validation_alias='LLM_MODEL')
+    api_key: str = Field(validation_alias='LLM_API_KEY')
+    api_base: str | None = Field(default=None, validation_alias='LLM_API_BASE')
+    lang: str = Field(validation_alias='LLM_LANGUAGE')
+    max_retries: int = Field(validation_alias='LLM_MAX_RETRIES')
+    temperature: float = Field(validation_alias='LLM_TEMPERATURE')
+    model_config = SettingsConfigDict(env_file='.env')
+
+class SMTPConfig(BaseSettings):
+    host: str = Field(validation_alias='SMTP_HOST')
+    port: int = Field(default=587, validation_alias='SMTP_PORT')
+    username: str = Field(validation_alias='SMTP_USERNAME')
+    password: str = Field(validation_alias='SMTP_PASSWORD')
+    sender: str = Field(default=username, validation_alias='SMTP_SENDER')
+    model_config = SettingsConfigDict(env_file='.env')
+
+class AppConfig(BaseSettings):
+    output_dir: str = Field(default='output' ,validation_alias='OUTPUT_DIR')
+    model_config = SettingsConfigDict(env_file='.env')
+
+@lru_cache
+def get_whisper_cfg():
+    return WhisperConfig()
+
+@lru_cache()
+def get_llm_cfg():
+    return LLMConfig()
+
+@lru_cache()
+def get_smtp_cfg():
+    return SMTPConfig()
+
+@lru_cache()
+def get_app_cfg():
+    return AppConfig()
