@@ -25,6 +25,9 @@ def process_job(job_id: str):
     except CalledProcessError as e:
         update_job(job_id, status=JobStatus.FAILED, error=str(e))
         return
+    except Exception as e:
+        update_job(job_id, status=JobStatus.FAILED, error=str(e))
+        return
     job['artifacts']['preprocessed'] = str(job_path/'preprocessed.wav')
     job['status'] = JobStatus.ASR_RUNNING
     update_job(job_id, status=job['status'], artifacts=job['artifacts'])
@@ -41,6 +44,8 @@ def process_job(job_id: str):
     except (AuthenticationError, RateLimitError, APIError) as e:
         update_job(job_id, status=JobStatus.FAILED, error=str(e))
         return
+    with open(job_path/'summary.txt', mode='w', encoding='UTF-8') as f:
+        f.write(summary.to_text())
     try:
         send_email(recipients=job['emails'],
                subject=summary.title,

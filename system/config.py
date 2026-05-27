@@ -23,7 +23,7 @@ class WhisperConfig(BaseSettings):
     device: str = Field(default='auto', validation_alias='WHISPER_DEVICE')
     compute_type: str = Field(default='auto' ,validation_alias='WHISPER_COMPUTE_TYPE')
     chunk_max_chars: int = Field(default=4000, validation_alias='MAX_CHARS')
-    model_config = SettingsConfigDict(env_file='.env')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 
 class LLMConfig(BaseSettings):
@@ -33,7 +33,7 @@ class LLMConfig(BaseSettings):
     lang: str = Field(validation_alias='LLM_LANGUAGE')
     max_retries: int = Field(validation_alias='LLM_MAX_RETRIES')
     temperature: float = Field(validation_alias='LLM_TEMPERATURE')
-    model_config = SettingsConfigDict(env_file='.env')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 class SMTPConfig(BaseSettings):
     host: str = Field(validation_alias='SMTP_HOST')
@@ -41,11 +41,11 @@ class SMTPConfig(BaseSettings):
     username: str = Field(validation_alias='SMTP_USERNAME')
     password: str = Field(validation_alias='SMTP_PASSWORD')
     sender: str = Field(default=username, validation_alias='SMTP_SENDER')
-    model_config = SettingsConfigDict(env_file='.env')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 class AppConfig(BaseSettings):
     output_dir: str = Field(default='output' ,validation_alias='OUTPUT_DIR')
-    model_config = SettingsConfigDict(env_file='.env')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 @lru_cache
 def get_whisper_cfg():

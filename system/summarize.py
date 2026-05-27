@@ -39,7 +39,7 @@ def _parse_json(text: str) -> dict:
     text_dict = json.loads(formated_text)
     return text_dict
 
-def summarize_chunk(chunk: str, config: LLMConfig) -> dict:
+def summarize_chunk(chunk: str) -> dict:
     config: LLMConfig = get_llm_cfg()
     response = completion(
         model=config.model,
