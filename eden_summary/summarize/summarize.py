@@ -6,7 +6,7 @@ from typing import List
 
 from litellm import completion
 
-from system.config import LLMConfig, get_llm_cfg
+from eden_summary.core.config import LLMConfig, get_llm_cfg
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ def summarize_chunk(chunk: str) -> dict:
         max_retries=config.max_retries,
         temperature=config.temperature,
         messages=[{
-            'role': 'system',
+            'role': 'eden_summary',
             'content': SYSTEM_PROMPT
         },
         {
@@ -113,7 +113,7 @@ def build_summary(chunks: List[str]) -> Summary:
         max_retries=config.max_retries,
         temperature=config.temperature,
         messages=[{
-            'role': 'system',
+            'role': 'eden_summary',
             'content': SYSTEM_PROMPT
         },
         {

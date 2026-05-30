@@ -2,7 +2,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import List
 
-from system.config import SMTPConfig, get_smtp_cfg
+from eden_summary.core.config import SMTPConfig, get_smtp_cfg
 
 
 def send_email(recipients: List[str], subject: str, body: str):

@@ -5,12 +5,12 @@ from typing import List
 
 from faster_whisper.transcribe import Segment
 
-from system.audio import convert_to_wav
-from system.config import get_app_cfg
-from system.emailer import send_email
-from system.job_store import JobStatus, update_job
-from system.summarize import build_summary, Summary
-from system.transcribe import transcribe, chunk_segments
+from eden_summary.transcribe.audio import convert_to_wav
+from eden_summary.core.config import get_app_cfg
+from eden_summary.email.emailer import send_email
+from eden_summary.core.job_store import JobStatus, update_job
+from eden_summary.summarize.summarize import build_summary, Summary
+from eden_summary.transcribe.transcribe import transcribe, chunk_segments
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def process_job(job_id: str):
     update_job(job_id, status=job['status'], artifacts=job['artifacts'])
     try:
         logger.info('Transcription started', extra={"job_id": job_id})
-        segments:List[Segment] = transcribe(audio_path=Path(job['artifacts']['preprocessed']))
+        segments: List[Segment] = transcribe(audio_path=Path(job['artifacts']['preprocessed']))
         logger.info('Transcription done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Transcription failed")

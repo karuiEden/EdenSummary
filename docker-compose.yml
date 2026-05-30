@@ -23,7 +23,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: celery -A system.worker worker
+    command: celery -A eden_summary.worker worker
     env_file:
       - .env
     volumes:

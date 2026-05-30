@@ -4,7 +4,7 @@ from typing import List
 from faster_whisper import WhisperModel
 from faster_whisper.transcribe import Segment
 
-from system.config import WhisperConfig, get_whisper_cfg
+from eden_summary.core.config import WhisperConfig, get_whisper_cfg
 
 
 def transcribe(audio_path: Path) -> List[Segment]:

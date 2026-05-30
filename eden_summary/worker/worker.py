@@ -1,7 +1,7 @@
 from celery import Celery
 
-from system import pipeline
-from system.config import get_celery_cfg
+from eden_summary import pipeline
+from eden_summary.core.config import get_celery_cfg
 
 cfg = get_celery_cfg()
 redis_url = f'redis://:{cfg.redis_password}@redis:6379/0'
