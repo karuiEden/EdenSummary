@@ -2,9 +2,9 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Annotated, List
 
-from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, BackgroundTasks
+from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
 
-from system.config import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg
+from system.config import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg
 from system.guards import equal_api_key, check_file, check_and_parse_emails, check_id
 from system.job_store import create_job, get_status, get_result
 from system.worker import process_job
@@ -20,6 +20,7 @@ async def lifespan(app: FastAPI):
         get_llm_cfg()
         get_whisper_cfg()
         get_smtp_cfg()
+        get_celery_cfg()
     except Exception as e:
         logger.critical(str(e))
         raise

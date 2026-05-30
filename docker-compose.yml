@@ -7,6 +7,22 @@ services:
       - .env
     volumes:
       - ./output:/app/output
+    depends_on: celery_worker
+    healthcheck:
+      test: ["CMD", "curl", "-X", "'GET'", "'http://0.0.0.0:8000/health'", "-H", "'accept:" "application/json'",
+             "-H" "'api-key:", "$X_API_KEY'"]
+
+  celery_worker:
+    image: celery:latest
+    container_name: worker
+    depends_on:
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    command:
+      - celery -A system.worker worker
+
 
   redis:
     image: redis:latest
@@ -17,6 +33,8 @@ services:
       - "6380:6379"
     volumes:
       - ./redis_data:/data
+    command:
+      - redis-server --requirepass ${REDIS_PASSWORD}
     deploy:
       resources:
         limits:
