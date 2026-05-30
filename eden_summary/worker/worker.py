@@ -13,5 +13,7 @@ celery_app = Celery('worker', broker=redis_url, backend=redis_url)
 
 @celery_app.task
 def process_job(job_id: str):
-    with AsyncLocalSession() as db_session:
-        asyncio.run(pipeline.process_job(job_id, db_session))
+    async def _run():
+        async with AsyncLocalSession() as db_session:
+            await pipeline.process_job(job_id, db_session)
+        asyncio.run(_run())
