@@ -56,6 +56,7 @@ class DBConfig(BaseSettings):
     username: str = Field(validation_alias='DB_USERNAME')
     password: str = Field(validation_alias='DB_PASSWORD')
     db:str = Field(validation_alias='DB_NAME')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
     @property
     def db_url(self) -> str:

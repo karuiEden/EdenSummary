@@ -5,6 +5,8 @@ description = "AI System for Summary long meetings"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
     "celery[redis]>=5.6.3",
     "email-validator>=2.3.0",
     "fastapi[standard]>=0.136.1",

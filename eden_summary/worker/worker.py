@@ -1,11 +1,10 @@
 import asyncio
 
 from celery import Celery
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from eden_summary.core.db import AsyncLocalSession
 from eden_summary import pipeline
 from eden_summary.core import get_celery_cfg
+from eden_summary.core.db import AsyncLocalSession
 
 cfg = get_celery_cfg()
 redis_url = f'redis://:{cfg.redis_password}@redis:6379/0'

@@ -1,7 +1,6 @@
 import hmac
 from pathlib import Path
 
-import magic
 from email_validator import validate_email, EmailNotValidError
 from fastapi import UploadFile
 from pydantic import UUID4
@@ -13,6 +12,7 @@ def equal_api_key(in_api_key: str):
     return hmac.compare_digest(in_api_key, X_API_KEY)
 
 async def check_file(file: UploadFile):
+    import magic
     file_ext = Path(str(file.filename)).suffix.lower()
     real_mime = magic.from_descriptor(file.file.fileno(), mime=True)
     await file.seek(0)

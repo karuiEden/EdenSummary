@@ -10,8 +10,8 @@ services:
     depends_on:
       celery_worker:
         condition: service_started
-      db:
-        condition: service_healthy
+      migrate:
+         condition: service_completed_successfully
     healthcheck:
       test: [ "CMD", "curl", "-f", "-H", "x-api-key: ${X_API_KEY}", "http://localhost:8000/health" ]
       interval: 30s
@@ -25,8 +25,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      db:
-        condition: service_healthy
+      migrate:
+         condition: service_completed_successfully
     command: celery -A eden_summary.worker.worker worker
     env_file:
       - .env
@@ -43,7 +43,7 @@ services:
       - "6380:6379"
     volumes:
       - ./redis_data:/data
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    command: redis-server --requirepass REDIS_PASSWORD
     deploy:
       resources:
         limits:
@@ -53,7 +53,7 @@ services:
           cpus: 0.25
           memory: 256M
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
+      test: ["CMD", "redis-cli", "-a", "REDIS_PASSWORD", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -61,12 +61,24 @@ services:
   db:
     image: postgres:latest
     container_name: postgres
+    ports:
+      - "5432:5432"
     environment:
-      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_USER=${DB_USERNAME}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ./pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      test: ["CMD", "pg_isready", "-U", "${DB_USERNAME}", "-d", "${DB_NAME}"]
       interval: 30s
       timeout: 10s
       retries: 5
+    restart: unless-stopped
+  migrate:
+    build: .
+    command: uv run alembic upgrade head
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
