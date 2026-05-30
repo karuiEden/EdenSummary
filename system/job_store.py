@@ -41,10 +41,8 @@ def create_job(file: UploadFile, emails: List[str] | None):
             shutil.copyfileobj(file.file, f)
         with open(job_path / "job.json", mode='w', encoding='UTF-8') as f:
             json.dump(job, f)
-    except PermissionError as err:
-        return {"status": JobStatus.FAILED, "error": err.strerror}
-    except OSError as err:
-        return {"status": JobStatus.FAILED, "error": err.strerror}
+    except OSError:
+        return {"status": JobStatus.FAILED, "error": "Internal server error. Job not create"}
     return {"status": JobStatus.QUEUED, "job_id": job_id}
 
 def get_status(job_id: str):

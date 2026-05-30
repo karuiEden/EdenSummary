@@ -27,13 +27,9 @@ def process_job(job_id: str):
         logger.info('Audio Preprocessing started', extra={"job_id": job_id})
         convert_to_wav(job['artifacts']['source'], job_path/'preprocessed.wav')
         logger.info('Audio Preprocessing done', extra={"job_id": job_id})
-    except CalledProcessError as e:
+    except (CalledProcessError, Exception):
         logger.exception("Audio conversion failed")
-        update_job(job_id, status=JobStatus.FAILED, error=str(e))
-        return
-    except Exception as e:
-        logger.exception("Audio conversion failed")
-        update_job(job_id, status=JobStatus.FAILED, error=str(e))
+        update_job(job_id, status=JobStatus.FAILED, error="Audio conversion failed")
         return
     job['artifacts']['preprocessed'] = str(job_path/'preprocessed.wav')
     job['status'] = JobStatus.ASR_RUNNING
@@ -42,9 +38,9 @@ def process_job(job_id: str):
         logger.info('Transcription started', extra={"job_id": job_id})
         segments:List[Segment] = transcribe(audio_path=Path(job['artifacts']['preprocessed']))
         logger.info('Transcription done', extra={"job_id": job_id})
-    except Exception as e:
+    except Exception:
         logger.exception("Transcription failed")
-        update_job(job_id, status=JobStatus.FAILED, error=str(e))
+        update_job(job_id, status=JobStatus.FAILED, error="Transcription failed")
         return
     chunks: List[str] = chunk_segments(segments)
     job['status'] = JobStatus.SUMMARY_RUNNING
@@ -53,9 +49,9 @@ def process_job(job_id: str):
         logger.info('LLM summarization started', extra={"job_id": job_id})
         summary: Summary = build_summary(chunks)
         logger.info('LLM summarization done', extra={"job_id": job_id})
-    except (AuthenticationError, RateLimitError, APIError) as e:
+    except (AuthenticationError, RateLimitError, APIError):
         logger.exception("LLM summarization failed")
-        update_job(job_id, status=JobStatus.FAILED, error=str(e))
+        update_job(job_id, status=JobStatus.FAILED, error="LLM summarization failed")
         return
     with open(job_path/'summary.txt', mode='w', encoding='UTF-8') as f:
         f.write(summary.to_text())
@@ -66,9 +62,10 @@ def process_job(job_id: str):
                body= summary.to_text()
         )
         logger.info('Email sending done', extra={"job_id": job_id})
-    except (smtplib.SMTPException, ConnectionRefusedError) as e:
+    except (smtplib.SMTPException, ConnectionRefusedError):
         logger.exception("Email sending failed")
-        update_job(job_id, status=JobStatus.SMTP_FAILED, error=str(e))
+        update_job(job_id, status=JobStatus.SMTP_FAILED, error=f"Email sending failed\nTo view the summary, go to "
+                                                               f"/{job_id}/result")
         return
     update_job(job_id, status=JobStatus.DONE)
     logger.info('Job done', extra={"job_id": job_id})
