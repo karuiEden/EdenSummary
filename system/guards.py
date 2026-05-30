@@ -1,6 +1,7 @@
 import hmac
 from pathlib import Path
 
+import magic
 from email_validator import validate_email, EmailNotValidError
 from fastapi import UploadFile
 from pydantic import UUID4
@@ -11,9 +12,12 @@ from system.config import audio_formats, X_API_KEY
 def equal_api_key(in_api_key: str):
     return hmac.compare_digest(in_api_key, X_API_KEY)
 
-def check_file(file: UploadFile):
+async def check_file(file: UploadFile):
     file_ext = Path(str(file.filename)).suffix.lower()
-    return file_ext in audio_formats.keys() and file.content_type in audio_formats.values() and audio_formats[file_ext] == file.content_type
+    real_mime = magic.from_descriptor(file.file.fileno(), mime=True)
+    await file.seek(0)
+    return (file_ext in audio_formats.keys() and file.content_type in audio_formats.values()
+            and audio_formats[file_ext] == file.content_type) and real_mime in audio_formats[file_ext]
 
 def check_and_parse_emails(emails_str: str | None):
     if emails_str is None or emails_str == '':
@@ -36,3 +40,4 @@ def check_id(job_id: str):
         return True
     except ValueError:
         return False
+
