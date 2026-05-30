@@ -37,8 +37,8 @@ def health():
     return {"status": "ok"}
 
 @app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
-def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()], background_tasks: BackgroundTasks):
-    if not check_file(file):
+async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()], background_tasks: BackgroundTasks):
+    if not await check_file(file):
         raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = create_job(file, emails_list)

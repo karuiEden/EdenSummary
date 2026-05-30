@@ -6,3 +6,4 @@ pydantic>=2.13.4
 faster-whisper
 python-dotenv
 python-magic
+pydantic-settings
