@@ -47,7 +47,7 @@ async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()]
         raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = await create_job(file, emails_list, db_session)
-    if resp["status"] == JobStatus.NON_EXISTING:
+    if resp["status"] == JobStatus.FAILED:
         raise HTTPException(status_code=507, detail=resp)
     process_job.delay(resp["job_id"])
     return resp
