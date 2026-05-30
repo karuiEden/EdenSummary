@@ -6,7 +6,7 @@ from faster_whisper.transcribe import Segment
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core import Job
+from eden_summary.core.models import Job
 from eden_summary.core import JobStatus, update_job
 from eden_summary.core import get_app_cfg
 from eden_summary.email_service import send_email
@@ -38,7 +38,7 @@ async def process_job(job_id: str, db_session: AsyncSession):
     await update_job(job_id, db_session, status=JobStatus.ASR_RUNNING, artifacts=job.artifacts)
     try:
         logger.info('Transcription started', extra={"job_id": job_id})
-        segments: List[Segment] = transcribe(audio_path=Path(job['artifacts']['preprocessed']))
+        segments: List[Segment] = transcribe(audio_path=Path(job.artifacts['preprocessed']))
         logger.info('Transcription done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Transcription failed")

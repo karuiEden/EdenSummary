@@ -9,7 +9,6 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import get_app_cfg
 from .models import Job
 
 
@@ -68,7 +67,7 @@ async def get_result(job_id: str, db_session: AsyncSession):
             return {"job_id": job_id, "status": JobStatus.NON_EXISTING, "error": "Job not found"}
 
     if job.status != "done":
-        return {"job_id": job_id, "status": job["status"]}
+        return {"job_id": job_id, "status": job.status}
     summary_path: Path = Path(job.artifacts['summary'])
     with summary_path.open(mode='r', encoding='UTF-8') as f:
         summary = f.read()
@@ -76,7 +75,6 @@ async def get_result(job_id: str, db_session: AsyncSession):
 
 
 async def update_job(job_id: str, session: AsyncSession, **fields):
-    get_app_cfg()
     async with session.begin():
         stmt = select(Job).where(Job.id == job_id)
         result = await session.execute(stmt)
@@ -85,4 +83,3 @@ async def update_job(job_id: str, session: AsyncSession, **fields):
             raise ValueError("Job not found")
         for field, value in fields.items():
             setattr(job, field, value)
-        await session.commit()

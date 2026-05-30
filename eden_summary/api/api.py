@@ -5,8 +5,8 @@ from typing import Annotated, List
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core import get_db_cfg
-from core.db import get_session
+from eden_summary.core import get_db_cfg, JobStatus
+from eden_summary.core.db import get_session
 from eden_summary.core import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg
 from eden_summary.core import equal_api_key, check_file, check_and_parse_emails, check_id
 from eden_summary.core import create_job, get_status, get_result
@@ -47,9 +47,9 @@ async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()]
         raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = await create_job(file, emails_list, db_session)
-    if resp["status"] == "failed":
+    if resp["status"] == JobStatus.NON_EXISTING:
         raise HTTPException(status_code=507, detail=resp)
-    process_job.delay(resp["job_id"], db_session)
+    process_job.delay(resp["job_id"])
     return resp
 
 @app.get("/v1/jobs/{job_id}", dependencies=[Depends(check_api_key)])
@@ -57,7 +57,7 @@ async def check_status_api(job_id: str, db_session: AsyncSession = Depends(get_s
     if not check_id(job_id):
         raise HTTPException(status_code=400)
     resp = await get_status(job_id, db_session)
-    if resp["status"] == "failed":
+    if resp["status"] == JobStatus.NON_EXISTING:
         raise HTTPException(status_code=404, detail=resp)
     return resp
 
