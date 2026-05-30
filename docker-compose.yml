@@ -11,6 +11,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-X", "'GET'", "'http://0.0.0.0:8000/health'", "-H", "'accept:" "application/json'",
              "-H" "'api-key:", "$X_API_KEY'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   celery_worker:
     image: celery:latest
