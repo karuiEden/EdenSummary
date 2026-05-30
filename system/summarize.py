@@ -1,11 +1,15 @@
 import concurrent.futures
 import json
+import logging
 from dataclasses import dataclass
 from typing import List
 
 from litellm import completion
 
 from system.config import LLMConfig, get_llm_cfg
+
+logger = logging.getLogger(__name__)
+
 
 SYSTEM_PROMPT: str = """ You are a business meeting analyst. 
 Extract structured information from meeting transcripts.
@@ -118,7 +122,7 @@ def build_summary(chunks: List[str]) -> Summary:
         }]
     )
     summary_dict = _parse_json(response.choices[0].message.content)
-
+    logger.debug("Reduce response: %s", summary_dict)
     summary = Summary(
         title=summary_dict.get('title', 'Meeting Summary'),
         tldr=_ensure_list(summary_dict.get('tldr', [])),

@@ -30,7 +30,6 @@ class LLMConfig(BaseSettings):
     model: str = Field(validation_alias='LLM_MODEL')
     api_key: str = Field(validation_alias='LLM_API_KEY')
     api_base: str | None = Field(default=None, validation_alias='LLM_API_BASE')
-    lang: str = Field(validation_alias='LLM_LANGUAGE')
     max_retries: int = Field(validation_alias='LLM_MAX_RETRIES')
     temperature: float = Field(validation_alias='LLM_TEMPERATURE')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')

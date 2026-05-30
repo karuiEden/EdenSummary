@@ -7,7 +7,7 @@ from system.guards import equal_api_key, check_file, check_and_parse_emails, che
 from system.job_store import create_job, get_status, get_result
 from system.pipeline import process_job
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
 
