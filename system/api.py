@@ -1,15 +1,31 @@
 import logging
+from contextlib import asynccontextmanager
 from typing import Annotated, List
 
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, BackgroundTasks
 
+from system.config import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg
 from system.guards import equal_api_key, check_file, check_and_parse_emails, check_id
 from system.job_store import create_job, get_status, get_result
 from system.pipeline import process_job
 
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        get_app_cfg()
+        get_llm_cfg()
+        get_whisper_cfg()
+        get_smtp_cfg()
+    except Exception as e:
+        logger.critical(str(e))
+        raise
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 def check_api_key(api_key: Annotated[str | None, Header()]):
     if api_key == '' or not equal_api_key(str(api_key)):
