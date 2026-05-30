@@ -47,7 +47,7 @@ class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 class CeleryConfig(BaseSettings):
-    redis_url: str = Field(validation_alias='REDIS_URL')
+    redis_password: str = Field(validation_alias='REDIS_PASSWORD')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 @lru_cache

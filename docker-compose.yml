@@ -15,6 +15,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    restart: unless-stopped
 
   celery_worker:
     build: .
@@ -23,7 +24,11 @@ services:
       redis:
         condition: service_healthy
     command: celery -A system.worker worker
-
+    env_file:
+      - .env
+    volumes:
+      - ./output:/app/output
+    restart: unless-stopped
 
   redis:
     image: redis:latest
