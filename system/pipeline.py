@@ -1,12 +1,9 @@
 import json
 import logging
-import smtplib
 from pathlib import Path
-from subprocess import CalledProcessError
 from typing import List
 
 from faster_whisper.transcribe import Segment
-from litellm import AuthenticationError, RateLimitError, APIError
 
 from system.audio import convert_to_wav
 from system.config import get_app_cfg
@@ -27,7 +24,7 @@ def process_job(job_id: str):
         logger.info('Audio Preprocessing started', extra={"job_id": job_id})
         convert_to_wav(job['artifacts']['source'], job_path/'preprocessed.wav')
         logger.info('Audio Preprocessing done', extra={"job_id": job_id})
-    except (CalledProcessError, Exception):
+    except Exception:
         logger.exception("Audio conversion failed")
         update_job(job_id, status=JobStatus.FAILED, error="Audio conversion failed")
         return
@@ -49,7 +46,7 @@ def process_job(job_id: str):
         logger.info('LLM summarization started', extra={"job_id": job_id})
         summary: Summary = build_summary(chunks)
         logger.info('LLM summarization done', extra={"job_id": job_id})
-    except (AuthenticationError, RateLimitError, APIError):
+    except Exception:
         logger.exception("LLM summarization failed")
         update_job(job_id, status=JobStatus.FAILED, error="LLM summarization failed")
         return
@@ -62,7 +59,7 @@ def process_job(job_id: str):
                body= summary.to_text()
         )
         logger.info('Email sending done', extra={"job_id": job_id})
-    except (smtplib.SMTPException, ConnectionRefusedError):
+    except Exception:
         logger.exception("Email sending failed")
         update_job(job_id, status=JobStatus.SMTP_FAILED, error=f"Email sending failed\nTo view the summary, go to "
                                                                f"/{job_id}/result")
