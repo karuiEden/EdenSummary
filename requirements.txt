@@ -7,3 +7,4 @@ faster-whisper
 python-dotenv
 python-magic
 pydantic-settings
+celery
