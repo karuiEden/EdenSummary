@@ -1,1 +1,1 @@
-from summarize.summarize import *
+from .summarize import *

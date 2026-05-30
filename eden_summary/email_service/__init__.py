@@ -1,1 +1,1 @@
-from emailer import *
+from .emailer import *

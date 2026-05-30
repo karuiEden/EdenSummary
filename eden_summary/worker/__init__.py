@@ -1,1 +1,1 @@
-from worker.worker import process_job
+from .worker import process_job
