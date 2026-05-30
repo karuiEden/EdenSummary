@@ -16,4 +16,4 @@ def process_job(job_id: str):
     async def _run():
         async with AsyncLocalSession() as db_session:
             await pipeline.process_job(job_id, db_session)
-        asyncio.run(_run())
+    asyncio.run(_run())
