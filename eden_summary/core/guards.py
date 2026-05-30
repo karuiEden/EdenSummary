@@ -6,7 +6,7 @@ from email_validator import validate_email, EmailNotValidError
 from fastapi import UploadFile
 from pydantic import UUID4
 
-from eden_summary.core.config import audio_formats, X_API_KEY
+from eden_summary.core import audio_formats, X_API_KEY
 
 
 def equal_api_key(in_api_key: str):

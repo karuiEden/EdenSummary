@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
-from eden_summary.core.config import get_app_cfg
+from eden_summary.core import get_app_cfg
 
 
 class JobStatus(StrEnum):

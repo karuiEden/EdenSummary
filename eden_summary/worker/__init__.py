@@ -1,0 +1,1 @@
+from worker.worker import process_job

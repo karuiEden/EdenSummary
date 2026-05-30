@@ -98,7 +98,7 @@ def summarize_chunk(chunk: str) -> dict:
             'content': CHUNK_USER_PROMPT.format(chunk=chunk)
         }]
     )
-    summary_chunk = _parse_json(response.choices[0].message.content)
+    summary_chunk = _parse_json(str(response.choices[0].message.content))
     return summary_chunk
 
 def build_summary(chunks: List[str]) -> Summary:
@@ -121,7 +121,7 @@ def build_summary(chunks: List[str]) -> Summary:
             'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks)
         }]
     )
-    summary_dict = _parse_json(response.choices[0].message.content)
+    summary_dict = _parse_json(str(response.choices[0].message.content))
     logger.debug("Reduce response: %s", summary_dict)
     summary = Summary(
         title=summary_dict.get('title', 'Meeting Summary'),
