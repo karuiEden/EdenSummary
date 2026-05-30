@@ -46,6 +46,11 @@ class AppConfig(BaseSettings):
     output_dir: str = Field(default='output' ,validation_alias='OUTPUT_DIR')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
+class CeleryConfig(BaseSettings):
+    redis_url: str = Field(validation_alias='REDIS_URL')
+    redis_password: str = Field(validation_alias='REDIS_PASSWORD')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+
 @lru_cache
 def get_whisper_cfg():
     return WhisperConfig()
@@ -61,3 +66,7 @@ def get_smtp_cfg():
 @lru_cache()
 def get_app_cfg():
     return AppConfig()
+
+@lru_cache()
+def get_celery_cfg():
+    return CeleryConfig()

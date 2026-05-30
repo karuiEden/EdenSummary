@@ -7,7 +7,7 @@ from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form, B
 from system.config import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg
 from system.guards import equal_api_key, check_file, check_and_parse_emails, check_id
 from system.job_store import create_job, get_status, get_result
-from system.pipeline import process_job
+from system.worker import process_job
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -37,14 +37,14 @@ def health():
     return {"status": "ok"}
 
 @app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
-async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()], background_tasks: BackgroundTasks):
+async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()]):
     if not await check_file(file):
         raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = create_job(file, emails_list)
     if resp["status"] == "failed":
         raise HTTPException(status_code=507, detail=resp)
-    background_tasks.add_task(process_job, job_id=resp["job_id"])
+    process_job.delay(resp["job_id"])
     return resp
 
 @app.get("/v1/jobs/{job_id}", dependencies=[Depends(check_api_key)])
