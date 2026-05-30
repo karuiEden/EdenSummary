@@ -50,6 +50,17 @@ class CeleryConfig(BaseSettings):
     redis_password: str = Field(validation_alias='REDIS_PASSWORD')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
+class DBConfig(BaseSettings):
+    host: str = Field(default='localhost', validation_alias='DB_HOST')
+    port: int = Field(default=5432, validation_alias='DB_PORT')
+    username: str = Field(validation_alias='DB_USERNAME')
+    password: str = Field(validation_alias='DB_PASSWORD')
+    db:str = Field(validation_alias='DB_NAME')
+
+    @property
+    def db_url(self) -> str:
+        return f'postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.db}'
+
 @lru_cache
 def get_whisper_cfg():
     return WhisperConfig()
@@ -69,3 +80,7 @@ def get_app_cfg():
 @lru_cache()
 def get_celery_cfg():
     return CeleryConfig()
+
+@lru_cache()
+def get_db_cfg():
+    return DBConfig()

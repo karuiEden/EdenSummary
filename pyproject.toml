@@ -17,6 +17,7 @@ dependencies = [
     "python-magic>=0.4.27",
     "python-multipart>=0.0.28",
     "ruff>=0.15.13",
+    "sqlalchemy[asyncio]>=2.0.50",
     "uvicorn>=0.47.0",
 ]
 
