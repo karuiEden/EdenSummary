@@ -1,0 +1,8 @@
+.venv
+.git
+__pycache__
+*.pyc
+pg_data
+minio/data
+output
+.env

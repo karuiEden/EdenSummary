@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from boto3 import client
+from botocore.config import Config
 
 from eden_summary.core import get_storage_cfg
 
@@ -11,7 +12,8 @@ s3_client = client(
     endpoint_url=cfg.endpoint,
     aws_access_key_id=cfg.access_key,
     aws_secret_access_key=cfg.secret_key,
-    region_name=cfg.region
+    region_name=cfg.region,
+    config=Config(s3={'addressing_style': 'path'})  # type: ignore[arg-type]
 )
 
 def upload_file(local_path: str, key: str):

@@ -90,7 +90,7 @@ def summarize_chunk(chunk: str) -> dict:
         max_retries=config.max_retries,
         temperature=config.temperature,
         messages=[{
-            'role': 'eden_summary',
+            'role': 'system',
             'content': SYSTEM_PROMPT
         },
         {
@@ -113,7 +113,7 @@ def build_summary(chunks: List[str]) -> Summary:
         max_retries=config.max_retries,
         temperature=config.temperature,
         messages=[{
-            'role': 'eden_summary',
+            'role': 'system',
             'content': SYSTEM_PROMPT
         },
         {
