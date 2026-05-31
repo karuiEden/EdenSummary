@@ -71,9 +71,9 @@ async def get_result(job_id: str, db_session: AsyncSession):
     if job.status != "done":
         return {"job_id": job_id, "status": job.status}
     summary_path: str = job.artifacts['summary']
-    with tempfile.NamedTemporaryFile(mode='r') as tmp:
+    with tempfile.NamedTemporaryFile() as tmp:
         download_file(summary_path, tmp.name)
-        with open(tmp.name, 'rb') as file:
+        with open(tmp.name, mode='r', encoding='UTF-8') as file:
             summary = file.read()
     return {"job_id": job_id, "status": job.status, "summary": summary}
 
