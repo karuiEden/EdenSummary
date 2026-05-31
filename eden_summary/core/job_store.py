@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from eden_summary.storage import upload_file, download_file
-from eden_summary.core import Job
+from .models import Job
 
 
 class JobStatus(StrEnum):
