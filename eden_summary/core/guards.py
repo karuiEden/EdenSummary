@@ -8,13 +8,13 @@ from fastapi import UploadFile
 from pydantic import UUID4
 
 from eden_summary.core import get_x_api_key
-from transcribe.audio import is_audio
+from eden_summary.transcribe import is_audio
 
 
-def equal_api_key(in_api_key: str):
+def equal_api_key(in_api_key: str) -> bool:
     return hmac.compare_digest(in_api_key, get_x_api_key())
 
-async def check_file(file: UploadFile):
+async def check_file(file: UploadFile) -> bool:
     import magic
     with tempfile.NamedTemporaryFile() as tmp:
         shutil.copyfileobj(file.file, tmp)
@@ -22,8 +22,7 @@ async def check_file(file: UploadFile):
         real_mime = magic.from_file(tmp.name, mime=True)
         real_check = is_audio(tmp.name)
     await file.seek(0)
-    return ((file.content_type.startswith('audio/') or file.content_type.startswith('video/')) and
-            (real_mime.startswith('audio/') or real_mime.startswith('video/'))) and real_check
+    return (real_mime.startswith('audio/') or real_mime.startswith('video/')) and real_check
 
 def check_and_parse_emails(emails_str: str | None):
     if emails_str is None or emails_str == '':
