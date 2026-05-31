@@ -32,8 +32,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-def check_api_key(x_api_key: Annotated[str | None, Header()]):
-    if x_api_key == '' or not equal_api_key(str(x_api_key)):
+def check_api_key(x_api_key: Annotated[str | None, Header()] = None):
+    if x_api_key is None and x_api_key == '' or not equal_api_key(str(x_api_key)):
         raise HTTPException(status_code=401)
 
 
