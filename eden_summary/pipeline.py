@@ -29,10 +29,11 @@ async def process_job(job_id: str, db_session: AsyncSession):
             raise ValueError("Job not found")
     try:
         logger.info('Audio Preprocessing started', extra={"job_id": job_id})
-        with tempfile.NamedTemporaryFile() as tmp:
-            download_file(job.artifacts['source'], tmp.name)
-            convert_to_wav(Path(tmp.name), Path(f'{job_id}/preprocessed.wav'))
-        upload_file(f'{job_id}/preprocessed.wav', f'{job_id}/preprocessed.wav')
+        with tempfile.NamedTemporaryFile() as tmp_source:
+            with tempfile.NamedTemporaryFile() as tmp_prep:
+                download_file(job.artifacts['source'], tmp_source.name)
+                convert_to_wav(Path(tmp_source.name), Path(tmp_prep.name))
+                upload_file(tmp_prep.name, f'{job_id}/preprocessed.wav')
         logger.info('Audio Preprocessing done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Audio conversion failed")
@@ -42,7 +43,9 @@ async def process_job(job_id: str, db_session: AsyncSession):
     await update_job(job_id, db_session, status=JobStatus.ASR_RUNNING, artifacts=job.artifacts)
     try:
         logger.info('Transcription started', extra={"job_id": job_id})
-        segments: List[Segment] = transcribe(audio_path=Path(job.artifacts['preprocessed']))
+        with tempfile.NamedTemporaryFile() as tmp:
+            download_file(job.artifacts['preprocessed'], tmp.name)
+            segments: List[Segment] = transcribe(audio_path=Path(tmp.name))
         logger.info('Transcription done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Transcription failed")
