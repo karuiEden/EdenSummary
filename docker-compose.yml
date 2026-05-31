@@ -14,6 +14,8 @@ services:
          condition: service_completed_successfully
       minio:
         condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD", "curl", "-f", "-H", "x-api-key: ${X_API_KEY}", "http://localhost:8000/health" ]
       interval: 30s
@@ -27,8 +29,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
       migrate:
          condition: service_completed_successfully
+      createbuckets:
+        condition: service_completed_successfully
     command: uv run celery -A eden_summary.worker.worker worker
     env_file:
       - .env
@@ -102,3 +108,16 @@ services:
       timeout: 10s
       retries: 5
     restart: unless-stopped
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/$$S3_BUCKET &&
+      mc admin user add local $$S3_ACCESS_KEY $$S3_SECRET_KEY &&
+      mc admin policy attach local readwrite --user $$S3_ACCESS_KEY
+      "
