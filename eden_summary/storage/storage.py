@@ -2,7 +2,7 @@ from pathlib import Path
 
 from boto3 import client
 
-from core import get_storage_cfg
+from eden_summary.core import get_storage_cfg
 
 cfg = get_storage_cfg()
 

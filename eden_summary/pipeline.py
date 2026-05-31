@@ -15,14 +15,12 @@ from eden_summary.summarize import build_summary, Summary
 from eden_summary.transcribe import chunk_segments, transcribe
 from eden_summary.transcribe import convert_to_wav
 from eden_summary.storage.storage import upload_file
-from storage.storage import download_file
+from eden_summary.storage.storage import download_file
 
 logger = logging.getLogger(__name__)
 
 async def process_job(job_id: str, db_session: AsyncSession):
-    config = get_app_cfg()
     logger.info('Job started', extra={"job_id": job_id})
-    job_path: Path = Path(f"{config.output_dir}/{job_id}")
     async with db_session.begin():
         stmt = select(Job).where(Job.id == job_id)
         result = await db_session.execute(stmt)
@@ -33,14 +31,14 @@ async def process_job(job_id: str, db_session: AsyncSession):
         logger.info('Audio Preprocessing started', extra={"job_id": job_id})
         with tempfile.NamedTemporaryFile() as tmp:
             download_file(job.artifacts['source'], tmp.name)
-        convert_to_wav(job.artifacts['source'], job_path/'preprocessed.wav')
-        upload_file(str(job_path/'preprocessed.wav'), str(job_path/'preprocessed.wav'))
+            convert_to_wav(Path(tmp.name), Path(f'{job_id}/preprocessed.wav'))
+        upload_file(f'{job_id}/preprocessed.wav', f'{job_id}/preprocessed.wav')
         logger.info('Audio Preprocessing done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Audio conversion failed")
         await update_job(job_id, db_session,status=JobStatus.FAILED, error="Audio conversion failed")
         return
-    job.artifacts['preprocessed'] = str(job_path/'preprocessed.wav')
+    job.artifacts['preprocessed'] = f'{job_id}/preprocessed.wav'
     await update_job(job_id, db_session, status=JobStatus.ASR_RUNNING, artifacts=job.artifacts)
     try:
         logger.info('Transcription started', extra={"job_id": job_id})
@@ -60,11 +58,10 @@ async def process_job(job_id: str, db_session: AsyncSession):
         logger.exception("LLM summarization failed")
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         return
-    summary_path: str = str(job_path/'summary.txt')
     with tempfile.NamedTemporaryFile(mode='w', encoding='UTF-8') as tmp:
         tmp.write(summary.to_text())
-        upload_file(tmp.name, summary_path)
-    job.artifacts['summary'] = summary_path
+        upload_file(tmp.name, f'{job_id}/summary.txt')
+    job.artifacts['summary'] = f'{job_id}/summary.txt'
     await update_job(job_id, db_session, artifacts=job.artifacts)
     try:
         logger.info('Email sending started', extra={"job_id": job_id})

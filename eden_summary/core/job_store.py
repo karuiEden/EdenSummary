@@ -10,7 +10,7 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storage.storage import upload_file, download_file
+from eden_summary.storage.storage import upload_file, download_file
 from .models import Job
 
 
@@ -25,10 +25,8 @@ class JobStatus(StrEnum):
 
 async def create_job(file: UploadFile, emails: List[str] | None, db_session: AsyncSession):
     job_id: str = str(uuid4())
-    job_path: Path = Path(f'output/{job_id}')
-    job_path.mkdir(parents=True, exist_ok=True)
     file_ext: str = Path(str(file.filename)).suffix.lower()
-    source_path = job_path / f"source{file_ext}"
+    source_path = f"{job_id}/source{file_ext}"
     job = Job(
         id = job_id,
         status = JobStatus.QUEUED,
@@ -36,7 +34,7 @@ async def create_job(file: UploadFile, emails: List[str] | None, db_session: Asy
         created_at = datetime.now(UTC),
         updated_at = datetime.now(UTC),
         artifacts = {
-            "source": str(source_path),
+            "source": source_path,
         },
         error = None,
         warning = "Emails not found. Get you result via job id." if emails is None else None,
@@ -47,7 +45,7 @@ async def create_job(file: UploadFile, emails: List[str] | None, db_session: Asy
             with tempfile.NamedTemporaryFile(suffix=file_ext) as tmp:
                 shutil.copyfileobj(file.file, tmp)
                 tmp.flush()
-                upload_file(tmp.name, job_path)
+                upload_file(tmp.name, source_path)
     except Exception:
         return {"status": JobStatus.FAILED, "error": "Internal server error. Job not create"}
     return {"status": JobStatus.QUEUED, "job_id": job_id}
@@ -72,10 +70,9 @@ async def get_result(job_id: str, db_session: AsyncSession):
 
     if job.status != "done":
         return {"job_id": job_id, "status": job.status}
-    summary_path: Path = Path(job.artifacts['summary'])
-
+    summary_path: str = job.artifacts['summary']
     with tempfile.NamedTemporaryFile() as tmp:
-        download_file(str(summary_path), tmp.name)
+        download_file(summary_path, tmp.name)
         summary = tmp.read()
     return {"job_id": job_id, "status": job.status, "summary": summary}
 
