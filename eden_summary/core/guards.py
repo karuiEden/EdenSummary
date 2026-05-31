@@ -31,7 +31,7 @@ def check_and_parse_emails(emails_str: str | None):
     emails = []
     for email in emails_list:
         try:
-            validate_email(email)
+            validate_email(email, check_deliverability=False)
             emails.append(email)
         except EmailNotValidError:
             pass
