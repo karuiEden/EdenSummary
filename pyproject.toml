@@ -30,3 +30,15 @@ explicit_package_bases = true
 
 [tool.ruff]
 line-length = 100
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

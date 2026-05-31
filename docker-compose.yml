@@ -121,3 +121,10 @@ services:
       mc admin user add local $$S3_ACCESS_KEY $$S3_SECRET_KEY &&
       mc admin policy attach local readwrite --user $$S3_ACCESS_KEY
       "
+  test:
+    build: .
+    env_file: .env
+    volumes:
+      - .:/app
+      - /app/.venv
+    command: sh -c "uv sync --group dev && uv run pytest -v"
