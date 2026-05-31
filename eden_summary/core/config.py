@@ -62,6 +62,13 @@ class DBConfig(BaseSettings):
     def db_url(self) -> str:
         return f'postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.db}'
 
+class StorageConfig(BaseSettings):
+    endpoint: str = Field(validation_alias='S3_ENDPOINT')
+    access_key: str = Field(validation_alias='S3_ACCESS_KEY')
+    secret_key: str = Field(validation_alias='S3_SECRET_KEY')
+    bucket_name: str = Field(validation_alias='S3_BUCKET')
+    region: str = Field(validation_alias='S3_REGION')
+
 @lru_cache
 def get_whisper_cfg():
     return WhisperConfig()
@@ -85,3 +92,7 @@ def get_celery_cfg():
 @lru_cache()
 def get_db_cfg():
     return DBConfig()
+
+@lru_cache()
+def get_storage_cfg():
+    return StorageConfig()

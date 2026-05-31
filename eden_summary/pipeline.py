@@ -1,4 +1,5 @@
 import logging
+import tempfile
 from pathlib import Path
 from typing import List
 
@@ -13,6 +14,7 @@ from eden_summary.email_service import send_email
 from eden_summary.summarize import build_summary, Summary
 from eden_summary.transcribe import chunk_segments, transcribe
 from eden_summary.transcribe import convert_to_wav
+from storage.storage import upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +56,11 @@ async def process_job(job_id: str, db_session: AsyncSession):
         logger.exception("LLM summarization failed")
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         return
-    summary_path: Path = job_path/'summary.txt'
-    with open(summary_path, mode='w', encoding='UTF-8') as f:
-        f.write(summary.to_text())
-    job.artifacts['summary'] = str(summary_path)
+    summary_path: str = str(job_path/'summary.txt')
+    with tempfile.NamedTemporaryFile() as tmp:
+        tmp.write(summary.to_text())
+        upload_file(tmp.name, summary_path)
+    job.artifacts['summary'] = summary_path
     await update_job(job_id, db_session, artifacts=job.artifacts)
     try:
         logger.info('Email sending started', extra={"job_id": job_id})

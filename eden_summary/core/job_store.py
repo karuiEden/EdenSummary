@@ -1,4 +1,5 @@
 import shutil
+import tempfile
 from datetime import datetime, UTC
 from enum import StrEnum
 from pathlib import Path
@@ -9,6 +10,7 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from storage.storage import upload_file, download_file
 from .models import Job
 
 
@@ -42,8 +44,10 @@ async def create_job(file: UploadFile, emails: List[str] | None, db_session: Asy
     try:
         async with db_session.begin():
             db_session.add(job)
-            with open(source_path, mode='wb') as f:
-                shutil.copyfileobj(file.file, f)
+            with tempfile.NamedTemporaryFile(suffix=file_ext) as tmp:
+                shutil.copyfileobj(file.file, tmp)
+                tmp.flush()
+                upload_file(tmp.name, job_path)
     except Exception:
         return {"status": JobStatus.FAILED, "error": "Internal server error. Job not create"}
     return {"status": JobStatus.QUEUED, "job_id": job_id}
@@ -69,8 +73,10 @@ async def get_result(job_id: str, db_session: AsyncSession):
     if job.status != "done":
         return {"job_id": job_id, "status": job.status}
     summary_path: Path = Path(job.artifacts['summary'])
-    with summary_path.open(mode='r', encoding='UTF-8') as f:
-        summary = f.read()
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        download_file(str(summary_path), tmp.name)
+        summary = tmp.read()
     return {"job_id": job_id, "status": job.status, "summary": summary}
 
 

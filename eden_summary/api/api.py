@@ -5,6 +5,7 @@ from typing import Annotated, List
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import get_storage_cfg
 from eden_summary.core import get_db_cfg, JobStatus
 from eden_summary.core.db import get_session
 from eden_summary.core import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
         get_smtp_cfg()
         get_celery_cfg()
         get_db_cfg()
+        get_storage_cfg()
     except Exception as e:
         logger.critical(str(e))
         raise

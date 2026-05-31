@@ -12,6 +12,8 @@ services:
         condition: service_started
       migrate:
          condition: service_completed_successfully
+      minio:
+        condition: service_started
     healthcheck:
       test: [ "CMD", "curl", "-f", "-H", "x-api-key: ${X_API_KEY}", "http://localhost:8000/health" ]
       interval: 30s
@@ -82,3 +84,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  minio:
+    image: quay.io/minio/aistor/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./minio/data:/mnt/data
+      - ./minio/minio.license:/minio.license
+    command: minio server /mnt/data --license /minio.license
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD", "curl", "-I", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
