@@ -6,7 +6,7 @@ from typing import List
 
 from litellm import completion
 
-from eden_summary.core.config import LLMConfig, get_llm_cfg
+from eden_summary.core import LLMConfig, get_llm_cfg
 
 logger = logging.getLogger(__name__)
 

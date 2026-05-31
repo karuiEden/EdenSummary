@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-from .config import get_db_cfg
+from eden_summary.core import get_db_cfg
 
 cfg = get_db_cfg()
 

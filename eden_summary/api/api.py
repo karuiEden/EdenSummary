@@ -5,13 +5,9 @@ from typing import Annotated, List
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from eden_summary.core import get_storage_cfg
-from eden_summary.core import get_db_cfg, JobStatus
-from eden_summary.core.db import get_session
-from eden_summary.core import get_app_cfg, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg
-from eden_summary.core import equal_api_key, check_file, check_and_parse_emails, check_id
-from eden_summary.core import create_job, get_status, get_result
+from eden_summary.core import get_x_api_key, get_storage_cfg, get_db_cfg, JobStatus, get_session, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg, equal_api_key, check_file, check_and_parse_emails, check_id, create_job, get_status, get_result
 from eden_summary.worker import process_job
+
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -20,7 +16,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        get_app_cfg()
+        get_x_api_key()
         get_llm_cfg()
         get_whisper_cfg()
         get_smtp_cfg()
@@ -35,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 def check_api_key(x_api_key: Annotated[str | None, Header()] = None):
-    if x_api_key is None and x_api_key == '' or not equal_api_key(str(x_api_key)):
+    if x_api_key is None or x_api_key == '' or not equal_api_key(str(x_api_key)):
         raise HTTPException(status_code=401)
 
 
@@ -44,7 +40,7 @@ def health():
     return {"status": "ok"}
 
 @app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
-async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()], db_session: AsyncSession = Depends(get_session)):
+async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form(default=None)], db_session: AsyncSession = Depends(get_session)):
     if not await check_file(file):
         raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)

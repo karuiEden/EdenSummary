@@ -2,20 +2,10 @@ import os
 from functools import lru_cache
 
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
-
-X_API_KEY = os.getenv("X_API_KEY")
-
-audio_formats = {
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
-    ".mp4": "video/mp4",
-    ".mov": "video/quicktime",
-    ".m4a": "audio/mp4",
-}
 
 class WhisperConfig(BaseSettings):
     model: str = Field(default='large-v3', validation_alias='WHISPER_MODEL')
@@ -39,12 +29,15 @@ class SMTPConfig(BaseSettings):
     port: int = Field(default=587, validation_alias='SMTP_PORT')
     username: str = Field(validation_alias='SMTP_USERNAME')
     password: str = Field(validation_alias='SMTP_PASSWORD')
-    sender: str = Field(default=username, validation_alias='SMTP_SENDER')
+    sender: str = Field(default=None, validation_alias='SMTP_SENDER')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
-class AppConfig(BaseSettings):
-    output_dir: str = Field(default='output' ,validation_alias='OUTPUT_DIR')
-    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+    @model_validator(mode='after')
+    def set_sender_default(self):
+        if not self.sender:
+            self.sender = self.username
+        return self
+
 
 class CeleryConfig(BaseSettings):
     redis_password: str = Field(validation_alias='REDIS_PASSWORD')
@@ -68,6 +61,7 @@ class StorageConfig(BaseSettings):
     secret_key: str = Field(validation_alias='S3_SECRET_KEY')
     bucket_name: str = Field(validation_alias='S3_BUCKET')
     region: str = Field(validation_alias='S3_REGION')
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 @lru_cache
 def get_whisper_cfg():
@@ -82,10 +76,6 @@ def get_smtp_cfg():
     return SMTPConfig()
 
 @lru_cache()
-def get_app_cfg():
-    return AppConfig()
-
-@lru_cache()
 def get_celery_cfg():
     return CeleryConfig()
 
@@ -96,3 +86,10 @@ def get_db_cfg():
 @lru_cache()
 def get_storage_cfg():
     return StorageConfig()
+
+@lru_cache()
+def get_x_api_key():
+    X_API_KEY = os.getenv('X_API_KEY')
+    if not X_API_KEY:
+        raise ValueError("X_API_KEY is not set")
+    return X_API_KEY

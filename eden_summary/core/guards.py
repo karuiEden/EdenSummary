@@ -1,23 +1,29 @@
 import hmac
+import shutil
+import tempfile
 from pathlib import Path
 
 from email_validator import validate_email, EmailNotValidError
 from fastapi import UploadFile
 from pydantic import UUID4
 
-from eden_summary.core import audio_formats, X_API_KEY
+from eden_summary.core import get_x_api_key
+from transcribe.audio import is_audio
 
 
 def equal_api_key(in_api_key: str):
-    return hmac.compare_digest(in_api_key, X_API_KEY)
+    return hmac.compare_digest(in_api_key, get_x_api_key())
 
 async def check_file(file: UploadFile):
     import magic
-    file_ext = Path(str(file.filename)).suffix.lower()
-    real_mime = magic.from_descriptor(file.file.fileno(), mime=True)
+    with tempfile.NamedTemporaryFile() as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp.flush()
+        real_mime = magic.from_file(tmp.name, mime=True)
+        real_check = is_audio(tmp.name)
     await file.seek(0)
-    return (file_ext in audio_formats.keys() and file.content_type in audio_formats.values()
-            and audio_formats[file_ext] == file.content_type) and real_mime == audio_formats[file_ext]
+    return ((file.content_type.startswith('audio/') or file.content_type.startswith('video/')) and
+            (real_mime.startswith('audio/') or real_mime.startswith('video/'))) and real_check
 
 def check_and_parse_emails(emails_str: str | None):
     if emails_str is None or emails_str == '':

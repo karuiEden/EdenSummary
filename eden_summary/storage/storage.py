@@ -20,9 +20,3 @@ def upload_file(local_path: str, key: str):
 def download_file(key: str, local_path: str):
     Path(local_path).parent.mkdir(parents=True, exist_ok=True)
     s3_client.download_file(cfg.bucket_name, key, local_path)
-
-def get_presigned_url(key: str) -> str:
-    return s3_client.generate_presigned_url('get_object', Params={
-        'Bucket': cfg.bucket_name,
-        'Key': key
-    }, ExpiresIn=3600)

@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import tempfile
 from datetime import datetime, UTC
@@ -10,8 +11,8 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from eden_summary.storage.storage import upload_file, download_file
-from .models import Job
+from eden_summary.storage import upload_file, download_file
+from eden_summary.core import Job
 
 
 class JobStatus(StrEnum):
@@ -42,10 +43,10 @@ async def create_job(file: UploadFile, emails: List[str] | None, db_session: Asy
     try:
         async with db_session.begin():
             db_session.add(job)
-            with tempfile.NamedTemporaryFile(suffix=file_ext) as tmp:
-                shutil.copyfileobj(file.file, tmp)
-                tmp.flush()
-                upload_file(tmp.name, source_path)
+        with tempfile.NamedTemporaryFile(suffix=file_ext) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp.flush()
+            await asyncio.to_thread(upload_file, tmp.name, source_path)
     except Exception:
         return {"status": JobStatus.FAILED, "error": "Internal server error. Job not create"}
     return {"status": JobStatus.QUEUED, "job_id": job_id}
@@ -72,7 +73,7 @@ async def get_result(job_id: str, db_session: AsyncSession):
         return {"job_id": job_id, "status": job.status}
     summary_path: str = job.artifacts['summary']
     with tempfile.NamedTemporaryFile() as tmp:
-        download_file(summary_path, tmp.name)
+        await asyncio.to_thread(download_file, summary_path, tmp.name)
         with open(tmp.name, mode='r', encoding='UTF-8') as file:
             summary = file.read()
     return {"job_id": job_id, "status": job.status, "summary": summary}

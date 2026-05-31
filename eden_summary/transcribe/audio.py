@@ -14,3 +14,9 @@ def get_duration(path: Path) -> float:
     )
     duration = float(res.stdout.decode().strip())
     return duration
+
+def is_audio(path: str) -> bool:
+    res = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", path], capture_output=True, check=True
+    )
+    return res.stdout == 'audio\n'
