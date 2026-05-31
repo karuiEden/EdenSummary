@@ -14,7 +14,8 @@ from eden_summary.email_service import send_email
 from eden_summary.summarize import build_summary, Summary
 from eden_summary.transcribe import chunk_segments, transcribe
 from eden_summary.transcribe import convert_to_wav
-from storage.storage import upload_file
+from eden_summary.storage.storage import upload_file
+from storage.storage import download_file
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,10 @@ async def process_job(job_id: str, db_session: AsyncSession):
             raise ValueError("Job not found")
     try:
         logger.info('Audio Preprocessing started', extra={"job_id": job_id})
+        with tempfile.NamedTemporaryFile() as tmp:
+            download_file(job.artifacts['source'], tmp.name)
         convert_to_wav(job.artifacts['source'], job_path/'preprocessed.wav')
+        upload_file(str(job_path/'preprocessed.wav'), str(job_path/'preprocessed.wav'))
         logger.info('Audio Preprocessing done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Audio conversion failed")
@@ -57,7 +61,7 @@ async def process_job(job_id: str, db_session: AsyncSession):
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         return
     summary_path: str = str(job_path/'summary.txt')
-    with tempfile.NamedTemporaryFile() as tmp:
+    with tempfile.NamedTemporaryFile(mode='w', encoding='UTF-8') as tmp:
         tmp.write(summary.to_text())
         upload_file(tmp.name, summary_path)
     job.artifacts['summary'] = summary_path
