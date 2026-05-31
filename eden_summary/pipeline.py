@@ -30,11 +30,12 @@ async def process_job(job_id: str, db_session: AsyncSession):
         with tempfile.NamedTemporaryFile(suffix=source_ext) as tmp_source:
             with tempfile.NamedTemporaryFile() as tmp_prep:
                 download_file(job.artifacts['source'], tmp_source.name)
+                logger.info("source size: %d", Path(tmp_source.name).stat().st_size)
                 convert_to_wav(Path(tmp_source.name), Path(tmp_prep.name))
                 upload_file(tmp_prep.name, f'{job_id}/preprocessed.wav')
         logger.info('Audio Preprocessing done', extra={"job_id": job_id})
-    except Exception:
-        logger.exception("Audio conversion failed")
+    except Exception as e:
+        logger.exception(f"Audio conversion failed\n{e}", extra={"job_id": job_id})
         await update_job(job_id, db_session,status=JobStatus.FAILED, error="Audio conversion failed")
         return
     job.artifacts['preprocessed'] = f'{job_id}/preprocessed.wav'
