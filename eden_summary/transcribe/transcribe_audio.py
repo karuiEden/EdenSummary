@@ -5,6 +5,8 @@ import litellm
 
 from eden_summary.core import WhisperConfig, get_whisper_cfg
 
+litellm.drop_params = True
+_ASR_PROTOCOL = "openai"
 
 def transcribe(audio_path: Path) -> List[str]:
     config: WhisperConfig = get_whisper_cfg()
@@ -14,6 +16,7 @@ def transcribe(audio_path: Path) -> List[str]:
             file=f,
             api_base=config.api_base,
             api_key=config.api_key,
+            custom_llm_provider=_ASR_PROTOCOL,
             response_format="verbose_json",
             timestamp_granularities=["segment"],
             language=config.lang
