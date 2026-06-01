@@ -35,7 +35,7 @@ services:
          condition: service_completed_successfully
       createbuckets:
         condition: service_completed_successfully
-    command: uv run celery -A eden_summary.worker.worker worker --loglevel=info
+    command: uv run celery -A eden_summary.worker.worker worker --loglevel=info -E
     env_file:
       - .env
     volumes:
@@ -121,13 +121,33 @@ services:
       mc admin user add local $$S3_ACCESS_KEY $$S3_SECRET_KEY &&
       mc admin policy attach local readwrite --user $$S3_ACCESS_KEY
       "
-  test:
+  test-unit:
     build: .
     env_file: .env
+    environment:
+      - UV_LINK_MODE=copy
     volumes:
       - .:/app
       - /app/.venv
-    command: sh -c "uv sync --group dev && uv run pytest -v"
+    command: sh -c "uv sync --group dev && uv run pytest tests/unit tests/integration -v"
+  test-api:
+    build: .
+    env_file: .env
+    environment:
+      - UV_LINK_MODE=copy
+    volumes:
+      - .:/app
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    command: sh -c "uv sync --group dev && uv run pytest tests/api -v"
   whisper-server:
     image: fedirz/faster-whisper-server:latest-cpu
     profiles: ["local-asr"]
@@ -146,3 +166,14 @@ services:
       timeout: 5s
       retries: 20
       start_period: 120s
+  flower:
+    build: .
+    container_name: flower
+    command: uv run celery -A eden_summary.worker.worker flower --port=5555
+    env_file: .env
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
