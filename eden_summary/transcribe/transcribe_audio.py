@@ -19,7 +19,7 @@ def transcribe(audio_path: Path) -> List[str]:
             language=config.lang
         )
     segments = getattr(response, 'segments', None) or []
-    return [segment["text"] for segment in segments if segment.get("text", "").strip()]
+    return [segment.get("text", "") for segment in segments if segment.get("text", "").strip()]
 
 
 def chunk_segments(segments: List[str]) -> List[str]:
