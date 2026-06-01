@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, List
 
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from eden_summary.core import get_x_api_key, get_storage_cfg, get_db_cfg, JobStatus, get_session, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg, equal_api_key, check_file, check_and_parse_emails, check_id, create_job, get_status, get_result
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+Instrumentator().instrument(app).expose(app)
 
 def check_api_key(x_api_key: Annotated[str | None, Header()] = None):
     if x_api_key is None or x_api_key == '' or not equal_api_key(str(x_api_key)):
