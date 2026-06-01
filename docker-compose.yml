@@ -128,3 +128,15 @@ services:
       - .:/app
       - /app/.venv
     command: sh -c "uv sync --group dev && uv run pytest -v"
+  whisper-server:
+    image: fedirz/faster-whisper-server:latest-cpu
+    profiles: ["local-asr"]
+    ports:
+      - "8001:8000"
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-Systran/faster-whisper-large-v3}
+      - WHISPER_VAD_FILTER=true
+    deploy:
+      resources:
+        limits:
+          memory: 4G

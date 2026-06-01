@@ -3,16 +3,14 @@ import tempfile
 from pathlib import Path
 from typing import List
 
-from faster_whisper.transcribe import Segment
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from eden_summary.core import Job, JobStatus, update_job
 from eden_summary.email_service import send_email
+from eden_summary.storage import upload_file, download_file
 from eden_summary.summarize import build_summary, Summary
 from eden_summary.transcribe import chunk_segments, transcribe, convert_to_wav
-from eden_summary.storage import upload_file, download_file
-
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +42,7 @@ async def process_job(job_id: str, db_session: AsyncSession):
         logger.info('Transcription started', extra={"job_id": job_id})
         with tempfile.NamedTemporaryFile() as tmp:
             download_file(job.artifacts['preprocessed'], tmp.name)
-            segments: List[Segment] = transcribe(audio_path=Path(tmp.name))
+            segments: List[str] = transcribe(audio_path=Path(tmp.name))
         logger.info('Transcription done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Transcription failed")

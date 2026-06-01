@@ -1,25 +1,33 @@
 from pathlib import Path
 from typing import List
 
-from faster_whisper import WhisperModel
-from faster_whisper.transcribe import Segment
+import litellm
 
 from eden_summary.core import WhisperConfig, get_whisper_cfg
 
 
-def transcribe(audio_path: Path) -> List[Segment]:
+def transcribe(audio_path: Path) -> List[str]:
     config: WhisperConfig = get_whisper_cfg()
-    model = WhisperModel(config.model, device=config.device, compute_type=config.compute_type)
-    segments, _ = model.transcribe(audio=str(audio_path), language=config.lang, vad_filter=True)
-    return list(segments)
+    with open(audio_path, 'rb') as f:
+        response = litellm.transcription(
+            model=config.model,
+            file=f,
+            api_base=config.api_base,
+            api_key=config.api_key,
+            response_format="verbose_json",
+            timestamp_granularities=["segment"],
+            language=config.lang
+        )
+    segments = getattr(response, 'segments', None) or []
+    return [segment["text"] for segment in segments if segment["text"]]
 
 
-def chunk_segments(segments: List[Segment]) -> List[str]:
+def chunk_segments(segments: List[str]) -> List[str]:
     max_chars = get_whisper_cfg().chunk_max_chars
     chunk = ''
     chunks = []
     for segment in segments:
-        chunk += segment.text
+        chunk += segment
         if len(chunk) >= max_chars:
             chunks.append(chunk)
             chunk = ''
