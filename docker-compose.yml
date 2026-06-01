@@ -169,7 +169,7 @@ services:
   flower:
     build: .
     container_name: flower
-    command: uv run celery -A eden_summary.worker.worker flower --port=5555
+    command: uv run celery -A eden_summary.worker.worker flower --port=5555 --basic-auth=${FLOWER_USER}:${FLOWER_PASSWORD}
     env_file: .env
     ports:
       - "5555:5555"
