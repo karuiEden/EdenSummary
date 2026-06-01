@@ -2,6 +2,8 @@
 /.env
 /.venv
 .idea
-/minio/minio.license
+/minio
 __pycache__/
 *.pyc
+/pg_data
+/redis_data
