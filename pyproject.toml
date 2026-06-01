@@ -11,6 +11,7 @@ dependencies = [
     "celery[redis]>=5.6.3",
     "email-validator>=2.3.0",
     "fastapi[standard]>=0.136.1",
+    "flower>=2.0.1",
     "litellm>=1.85.0",
     "mypy>=2.1.0",
     "pydantic>=2.13.4",
