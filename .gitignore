@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 /pg_data
 /redis_data
+alembic/__pycache__
+alembic/versions/__pycache__
