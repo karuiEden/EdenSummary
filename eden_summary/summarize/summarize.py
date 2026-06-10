@@ -1,6 +1,7 @@
 import concurrent.futures
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import List
 
@@ -77,17 +78,20 @@ def _ensure_list(value: List[str] | str | None) -> list[str]:
     return []
 
 def _parse_json(text: str) -> dict:
-    formated_text = text[text.find('{'):text.rfind('}') + 1]
-    text_dict = json.loads(formated_text)
-    return text_dict
+    start = text.find('{')
+    end = text.rfind('}')
+    if start == -1 or end == -1:
+        raise ValueError('JSON object not found')
+    return json.loads(text[start:end+1])
 
-def summarize_chunk(chunk: str) -> dict:
+def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
     config: LLMConfig = get_llm_cfg()
     response = completion(
         model=config.model,
         api_key=config.api_key,
         api_base=config.api_base,
         max_retries=config.max_retries,
+        timeout=config.timeout,
         temperature=config.temperature,
         messages=[{
             'role': 'system',
@@ -98,12 +102,21 @@ def summarize_chunk(chunk: str) -> dict:
             'content': CHUNK_USER_PROMPT.format(chunk=chunk)
         }]
     )
-    summary_chunk = _parse_json(str(response.choices[0].message.content))
-    return summary_chunk
+    try:
+        return _parse_json(str(response.choices[0].message.content))
+    except (json.JSONDecodeError, ValueError) as e:
+        if _attempt + 1 >= config.max_parse_attempts:
+            logger.error(f"Failed to parse LLM output after {_attempt + 1} attempts: {e}")
+            raise
+        logger.warning(f'JSON parse error (attempt {_attempt}, retrying LLM call: {e}')
+        time.sleep(0.5 * (_attempt + 1))
+        return summarize_chunk(chunk, _attempt + 1)
+
+
 
 def build_summary(chunks: List[str]) -> Summary:
     config: LLMConfig = get_llm_cfg()
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=config.max_workers) as executor:
         summary_chunks = list(executor.map(summarize_chunk, chunks))
 
     response = completion(
@@ -112,6 +125,7 @@ def build_summary(chunks: List[str]) -> Summary:
         api_base=config.api_base,
         max_retries=config.max_retries,
         temperature=config.temperature,
+        timeout=config.timeout,
         messages=[{
             'role': 'system',
             'content': SYSTEM_PROMPT

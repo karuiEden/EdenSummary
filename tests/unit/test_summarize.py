@@ -1,5 +1,14 @@
-from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary
+from unittest.mock import patch, MagicMock
 
+import pytest
+
+from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk
+
+
+def _fake_response(content: str) -> MagicMock:
+    resp = MagicMock()
+    resp.choices[0].message.content = content
+    return resp
 
 class TestParseJson:
     def test_plain_json(self):
@@ -13,6 +22,10 @@ class TestParseJson:
 
     def test_handles_nested_objects(self):
         assert _parse_json('{"a": {"b": 2}}') == {"a": {"b": 2}}
+
+    def test_raises_when_no_json_object(self):
+        with pytest.raises(ValueError):
+            _parse_json("no json here at all")
 
 
 class TestEnsureList:
@@ -63,3 +76,32 @@ class TestSummaryToText:
     def test_all_empty_is_empty_string(self):
         s = Summary(title="T", tldr=[], decisions=[], action_items=[], risks=[])
         assert s.to_text() == ""
+
+class TestSummarizeChunkRetry:
+
+    @patch(
+        "eden_summary.summarize.summarize.time.sleep")  # не ждать в тесте
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_summarize_chunk_retries_then_succeeds(self, mock_completion, mock_cfg, _sleep):
+        mock_completion.side_effect = [
+            _fake_response("garbage no json"),
+            # attempt 0 -> fail
+            _fake_response('{"decisions": ["ok"]}'),
+            # attempt 1 -> success
+        ]
+        mock_cfg.return_value.max_parse_attempts = 3
+        result = summarize_chunk("transcript")
+        assert result == {"decisions": ["ok"]}
+        assert mock_completion.call_count == 2
+
+
+    @patch("eden_summary.summarize.summarize.time.sleep")
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_summarize_chunk_raises_after_three_failures(self, mock_completion, mock_cfg, _sleep):
+        mock_completion.return_value = _fake_response("never valid json")
+        mock_cfg.return_value.max_parse_attempts = 3
+        with pytest.raises(ValueError):
+            summarize_chunk("transcript")
+        assert mock_completion.call_count == 3  # 0,1,2 -> stop

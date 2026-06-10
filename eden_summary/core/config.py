@@ -22,6 +22,9 @@ class LLMConfig(BaseSettings):
     api_base: str | None = Field(default=None, validation_alias='LLM_API_BASE')
     max_retries: int = Field(validation_alias='LLM_MAX_RETRIES')
     temperature: float = Field(validation_alias='LLM_TEMPERATURE')
+    timeout: int = Field(validation_alias='LLM_TIMEOUT')
+    max_parse_attempts: int = Field(validation_alias='LLM_PARSE_MAX_ATTEMPTS')
+    max_workers: int = Field(default=5, validation_alias='LLM_MAX_WORKERS')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 class SMTPConfig(BaseSettings):
