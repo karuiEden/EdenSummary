@@ -32,6 +32,10 @@ explicit_package_bases = true
 [tool.ruff]
 line-length = 100
 
+[[tool.mypy.overrides]]
+module = ["boto3", "botocore.*", "celery", "celery.*"]
+ignore_missing_imports = true
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
