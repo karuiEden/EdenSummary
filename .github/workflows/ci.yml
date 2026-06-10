@@ -22,3 +22,6 @@ jobs:
 
       - name: Type check
         run: uv run mypy eden_summary/
+
+      - name: Test
+        run: uv run pytest tests/unit -v
