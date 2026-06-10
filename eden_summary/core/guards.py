@@ -1,7 +1,6 @@
 import hmac
 import shutil
 import tempfile
-from pathlib import Path
 
 from email_validator import validate_email, EmailNotValidError
 from fastapi import UploadFile

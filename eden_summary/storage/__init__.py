@@ -1,1 +1,1 @@
-from .storage import upload_file, download_file
+from .storage import upload_file as upload_file, download_file as download_file

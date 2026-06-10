@@ -1,1 +1,1 @@
-from .summarize import Summary, summarize_chunk, build_summary
+from .summarize import Summary as Summary, summarize_chunk as summarize_chunk, build_summary as build_summary
