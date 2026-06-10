@@ -1,0 +1,20 @@
+from prometheus_client import Counter, Histogram
+
+job_stage_seconds = Histogram(
+    'eden_job_stage_seconds',
+    'Processing time per job stage',
+    ['stage'],
+    buckets=[1, 5, 15, 30, 60, 120, 300, 600, 1800, 3600],
+)
+
+asr_processing_ratio = Histogram(
+    'eden_asr_processing_ratio',
+    'ASR processing time divided by audio duration',
+    buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0],
+)
+
+job_terminal_total = Counter(
+    'eden_job_terminal_total',
+    'Jobs by terminal status',
+    ['status'],
+)
