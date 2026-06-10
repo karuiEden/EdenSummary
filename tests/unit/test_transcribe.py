@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 import eden_summary.transcribe.transcribe_audio as ta
-from eden_summary.transcribe.transcribe_audio import chunk_segments
+from eden_summary.transcribe.transcribe_audio import chunk_segments, _to_bcp47
 
 
 @pytest.fixture
@@ -34,3 +34,20 @@ class TestChunkSegments:
         # ничего не достигает порога -> всё уходит одним финальным чанком
         segs = ["ab", "cd"]
         assert chunk_segments(segs) == ["abcd"]
+
+
+class TestToBcp47:
+    def test_full_name_russian(self):
+        assert _to_bcp47('russian') == 'ru'
+
+    def test_iso_code(self):
+        assert _to_bcp47('en') == 'en'
+
+    def test_case_insensitive(self):
+        assert _to_bcp47('RUSSIAN') == 'ru'
+
+    def test_unknown_returns_none(self):
+        assert _to_bcp47('klingon') is None
+
+    def test_none_returns_none(self):
+        assert _to_bcp47(None) is None

@@ -9,9 +9,9 @@ cfg = get_celery_cfg()
 redis_url = f'redis://:{cfg.redis_password}@redis:6379/0'
 celery_app = Celery('worker', broker=redis_url, backend=redis_url)
 
-@celery_app.task
-def process_job(job_id: str):
+@celery_app.task(acks_late=True, reject_on_worker_lost=True, soft_time_limit=cfg.soft_timeout, time_limit=cfg.hard_timeout)
+def process_job(job_id: str, language: str | None = None):
     async def _run():
         async with AsyncLocalSession() as db_session:
-            await pipeline.process_job(job_id, db_session)
+            await pipeline.process_job(job_id, language, db_session)
     asyncio.run(_run())

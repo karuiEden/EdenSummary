@@ -32,7 +32,7 @@ class SMTPConfig(BaseSettings):
     port: int = Field(default=587, validation_alias='SMTP_PORT')
     username: str = Field(validation_alias='SMTP_USERNAME')
     password: str = Field(validation_alias='SMTP_PASSWORD')
-    sender: str = Field(default=None, validation_alias='SMTP_SENDER')
+    sender: str | None = Field(default=None, validation_alias='SMTP_SENDER')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
     @model_validator(mode='after')
@@ -44,7 +44,13 @@ class SMTPConfig(BaseSettings):
 
 class CeleryConfig(BaseSettings):
     redis_password: str = Field(validation_alias='REDIS_PASSWORD')
+    timeout_grace: int = Field(default=300, validation_alias='JOB_TIMEOUT_GRACE')
+    soft_timeout: int = Field(default=21600, validation_alias='JOB_SOFT_TIMEOUT')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+
+    @property
+    def hard_timeout(self):
+        return self.soft_timeout + self.timeout_grace
 
 class DBConfig(BaseSettings):
     host: str = Field(default='localhost', validation_alias='DB_HOST')
@@ -53,6 +59,9 @@ class DBConfig(BaseSettings):
     password: str = Field(validation_alias='DB_PASSWORD')
     db:str = Field(validation_alias='DB_NAME')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+
+    def __repr__(self) -> str:
+        return f'DBConfig(host={self.host}, port={self.port}, db={self.db})'
 
     @property
     def db_url(self) -> str:

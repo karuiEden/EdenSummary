@@ -9,3 +9,4 @@ __pycache__/
 /redis_data
 alembic/__pycache__
 alembic/versions/__pycache__
+docker-compose.override.yml

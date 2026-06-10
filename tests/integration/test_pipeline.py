@@ -126,7 +126,7 @@ async def test_smtp_failure_keeps_result_available(mocks):
     await process_job("job-1", mocks.db)
 
     statuses = _statuses(mocks.update_job)
-    assert JobStatus.SMTP_FAILED in statuses
+    assert JobStatus.EMAIL_FAILED in statuses
     assert JobStatus.DONE not in statuses  # ключевое: SMTP-сбой != провал джоба
     # summary всё равно загружен в S3 до отправки письма
     assert any("summary.txt" in str(c.args) for c in mocks.upload_file.call_args_list)

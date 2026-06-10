@@ -13,7 +13,12 @@ s3_client = client(
     aws_access_key_id=cfg.access_key,
     aws_secret_access_key=cfg.secret_key,
     region_name=cfg.region,
-    config=Config(s3={'addressing_style': 'path'})  # type: ignore[arg-type]
+    config=Config(
+        s3={'addressing_style': 'path'}, # type: ignore[arg-type]
+        connect_timeout=10,
+        read_timeout=60,
+        retries={'max_attempts': 3} # type: ignore[arg-type]
+    )
 )
 
 def upload_file(local_path: str, key: str):

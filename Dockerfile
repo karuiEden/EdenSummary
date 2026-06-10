@@ -1,4 +1,4 @@
-FROM python:3.12
+FROM python:3.14
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -8,12 +8,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libmagic1  \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m app
 
-COPY pyproject.toml uv.lock ./
+COPY --chown=app:app pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
-COPY . .
+COPY --chown=app:app . .
+
+USER app
 
 EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "eden_summary.api.api:app", "--host", "0.0.0.0", "--port", "8000"]

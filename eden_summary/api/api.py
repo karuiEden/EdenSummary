@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Annotated, List
 
@@ -10,7 +11,7 @@ from eden_summary.core import get_x_api_key, get_storage_cfg, get_db_cfg, JobSta
 from eden_summary.worker import process_job
 
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=getattr(logging, os.getenv('LOG_LEVEL', "INFO").upper(), logging.INFO))
 logger = logging.getLogger(__name__)
 
 
@@ -37,19 +38,22 @@ def check_api_key(x_api_key: Annotated[str | None, Header()] = None):
         raise HTTPException(status_code=401)
 
 
-@app.get("/health", dependencies=[Depends(check_api_key)])
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
 @app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
-async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()] = None, db_session: AsyncSession = Depends(get_session)):
+async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()] = None, language: Annotated[str | None, Form()] = None, db_session: AsyncSession = Depends(get_session)):
     if not await check_file(file):
         raise HTTPException(status_code=415)
+    max_bytes = int(os.getenv('MAX_UPLOAD_MB', "500")) * 1024 * 1024
+    if file.size and file.size > max_bytes:
+        raise HTTPException(status_code=413)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = await create_job(file, emails_list, db_session)
     if resp["status"] == JobStatus.FAILED:
         raise HTTPException(status_code=507, detail=resp)
-    process_job.delay(resp["job_id"])
+    process_job.delay(resp["job_id"], language)
     return resp
 
 @app.get("/v1/jobs/{job_id}", dependencies=[Depends(check_api_key)])

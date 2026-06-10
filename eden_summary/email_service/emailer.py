@@ -6,6 +6,8 @@ from eden_summary.core import SMTPConfig, get_smtp_cfg
 
 
 def send_email(recipients: List[str], subject: str, body: str):
+    if not recipients:
+        return
     config: SMTPConfig = get_smtp_cfg()
     with smtplib.SMTP(host=config.host, port=config.port) as server:
         server.ehlo()

@@ -22,7 +22,7 @@ class JobStatus(StrEnum):
     NON_EXISTING = "non_existing"
     DONE = "done"
     FAILED = "failed"
-    SMTP_FAILED = 'email_failed'
+    EMAIL_FAILED = 'email_failed'
 
 async def create_job(file: UploadFile, emails: List[str] | None, db_session: AsyncSession):
     job_id: str = str(uuid4())
@@ -73,9 +73,12 @@ async def get_result(job_id: str, db_session: AsyncSession):
         return {"job_id": job_id, "status": job.status}
     summary_path: str = job.artifacts['summary']
     with tempfile.NamedTemporaryFile() as tmp:
-        await asyncio.to_thread(download_file, summary_path, tmp.name)
-        with open(tmp.name, mode='r', encoding='UTF-8') as file:
-            summary = file.read()
+        try:
+            await asyncio.to_thread(download_file, summary_path, tmp.name)
+            with open(tmp.name, mode='r', encoding='UTF-8') as file:
+                summary = file.read()
+        except Exception:
+            return {"job_id": job_id, "status": JobStatus.FAILED, "error": "Internal server error"}
     return {"job_id": job_id, "status": job.status, "summary": summary}
 
 

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import tempfile
 from pathlib import Path
@@ -10,11 +11,11 @@ from eden_summary.core import Job, JobStatus, update_job
 from eden_summary.email_service import send_email
 from eden_summary.storage import upload_file, download_file
 from eden_summary.summarize import build_summary, Summary
-from eden_summary.transcribe import chunk_segments, transcribe, convert_to_wav
+from eden_summary.transcribe import chunk_segments, transcribe, convert_to_wav, Transcription
 
 logger = logging.getLogger(__name__)
 
-async def process_job(job_id: str, db_session: AsyncSession):
+async def process_job(job_id: str, language: str | None, db_session: AsyncSession):
     logger.info('Job started', extra={"job_id": job_id})
     async with db_session.begin():
         stmt = select(Job).where(Job.id == job_id)
@@ -22,6 +23,9 @@ async def process_job(job_id: str, db_session: AsyncSession):
         job = result.scalar_one_or_none()
         if job is None:
             raise ValueError("Job not found")
+        if job.status != JobStatus.QUEUED:
+            logger.info('Job already processed', extra={"job_id": job_id})
+            return
     try:
         logger.info('Audio Preprocessing started', extra={"job_id": job_id})
         source_ext = Path(job.artifacts['source']).suffix
@@ -42,24 +46,30 @@ async def process_job(job_id: str, db_session: AsyncSession):
         logger.info('Transcription started', extra={"job_id": job_id})
         with tempfile.NamedTemporaryFile() as tmp:
             download_file(job.artifacts['preprocessed'], tmp.name)
-            segments: List[str] = transcribe(audio_path=Path(tmp.name))
+            transcription: Transcription = transcribe(audio_path=Path(tmp.name), language=language)
+        segments: List[str] = transcription.segments
+        detected_lang: str | None = transcription.language
         logger.info('Transcription done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Transcription failed")
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="Transcription failed")
         return
+    if not segments:
+        logger.warning("Empty transcription", extra={"job_id": job_id})
+        await update_job(job_id, db_session, status=JobStatus.FAILED, error="Transcription returned empty result")
+        return
     chunks: List[str] = chunk_segments(segments)
     await update_job(job_id, db_session, status=JobStatus.SUMMARY_RUNNING)
     try:
         logger.info('LLM summarization started', extra={"job_id": job_id})
-        summary: Summary = build_summary(chunks)
+        summary: Summary = await asyncio.to_thread(build_summary, chunks)
         logger.info('LLM summarization done', extra={"job_id": job_id})
     except Exception:
         logger.exception("LLM summarization failed")
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         return
     with tempfile.NamedTemporaryFile(mode='w', encoding='UTF-8') as tmp:
-        tmp.write(summary.to_text())
+        tmp.write(summary.to_text(detected_lang))
         tmp.flush()
         upload_file(tmp.name, f'{job_id}/summary.txt')
     job.artifacts['summary'] = f'{job_id}/summary.txt'
@@ -68,12 +78,12 @@ async def process_job(job_id: str, db_session: AsyncSession):
         logger.info('Email sending started', extra={"job_id": job_id})
         send_email(recipients=job.emails,
                subject=summary.title,
-               body= summary.to_text()
+               body= summary.to_text(detected_lang)
         )
         logger.info('Email sending done', extra={"job_id": job_id})
     except Exception:
         logger.exception("Email sending failed")
-        await update_job(job_id, db_session, status=JobStatus.SMTP_FAILED, error=f"Email sending failed\nTo view the summary, go to "
+        await update_job(job_id, db_session, status=JobStatus.EMAIL_FAILED, error=f"Email sending failed\nTo view the summary, go to "
                                                                f"/{job_id}/result")
         return
     await update_job(job_id, db_session, status=JobStatus.DONE)

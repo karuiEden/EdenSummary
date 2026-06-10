@@ -77,6 +77,28 @@ class TestSummaryToText:
         s = Summary(title="T", tldr=[], decisions=[], action_items=[], risks=[])
         assert s.to_text() == ""
 
+    def test_to_text_russian_headers(self):
+        s = self._full()
+        text = s.to_text('ru-RU')
+        assert 'Решения' in text
+        assert 'Задачи' in text
+
+    def test_to_text_english_headers(self):
+        s = self._full()
+        text = s.to_text('en-US')
+        assert 'Decisions' in text
+        assert 'Action Items' in text
+
+    def test_to_text_unknown_lang_falls_back_to_default(self):
+        s = self._full()
+        text = s.to_text('zh')
+        # неизвестный язык → DEFAULT_LOCALE ('ru')
+        assert 'Решения' in text
+
+    def test_to_text_none_lang_falls_back_to_default(self):
+        s = self._full()
+        assert s.to_text(None) == s.to_text()
+
 class TestSummarizeChunkRetry:
 
     @patch(

@@ -12,14 +12,17 @@ from eden_summary.core import LLMConfig, get_llm_cfg
 logger = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT: str = """ You are a business meeting analyst. 
-Extract structured information from meeting transcripts.
-Follow these rules strictly:
-- Extract ONLY information explicitly mentioned in the transcript
-- Do not add recommendations, advice, or any information not present in the text
-- If a field has no data, return an empty list
-- Respond in the same language as the transcript
-- Return ONLY valid JSON, no markdown, no explanations
+SYSTEM_PROMPT: str = """ You are a business meeting analyst.                                                                                                                                                                    
+  Extract structured information from meeting transcripts.                                                                                                                                                                        
+  Follow these rules strictly:                                                                                                                                                                                                    
+  - Extract ONLY information explicitly mentioned in the transcript                                                                                                                                                               
+  - Do not add recommendations, advice, or any information not present in the text                                                                                                                                                
+  - If a field has no data, return an empty list                                                                                                                                                                                  
+  - An empty list is always better than a fabricated item                                                                                                                                                                         
+  - Respond in the same language as the transcript                                                                                                                                                                                
+  - Return ONLY valid JSON, no markdown, no explanations                                                                                                                                                                          
+                                                                                                                                                                                                                                  
+  Scoring: +1 correct item, −4 fabricated item, 0 omitted item. No explicit evidence → empty list. 
 """
 
 CHUNK_USER_PROMPT: str = """Analyze the following meeting transcript fragment and extract:
@@ -29,6 +32,9 @@ CHUNK_USER_PROMPT: str = """Analyze the following meeting transcript fragment an
 
 Transcript fragment:
 {chunk}
+
+
+Omit any item you cannot directly quote from the fragment (omission scores 0; fabrication scores −4).
 """
 
 REDUCE_USER_PROMPT: str = """
@@ -44,7 +50,33 @@ Fields to produce:
 
 Chunk analyses:
 {chunks}
+
+
+Omit any item you cannot directly quote from the fragment (omission scores 0; fabrication scores −4).
 """
+
+_DEFAULT_LOCALE = 'ru'
+
+_HEADERS: dict[str, dict[str, str]] = {
+    'ru': {
+        'tldr': 'TL;DR',
+        'decisions': 'Решения',
+        'action_items': 'Задачи',
+        'risks': 'Риски',
+    },
+    'en': {
+        'tldr': 'TL;DR',
+        'decisions': 'Decisions',
+        'action_items': 'Action Items',
+        'risks': 'Risks',
+    },
+}
+
+
+def _primary_subtag(bcp47: str | None) -> str | None:
+    if not bcp47:
+        return None
+    return bcp47.split('-')[0].lower()
 
 @dataclass(frozen=True)
 class Summary:
@@ -54,13 +86,9 @@ class Summary:
     action_items: List[str]
     risks: List[str]
 
-    def to_text(self) -> str:
-        headers = {
-            'tldr': 'TL;DR',
-            'decisions': 'Решения',
-            'action_items': 'Задачи',
-            'risks': 'Риски'
-        }
+    def to_text(self, lang: str | None = None) -> str:
+        locale = _primary_subtag(lang) or _DEFAULT_LOCALE
+        headers = _HEADERS.get(locale, _HEADERS[_DEFAULT_LOCALE])
         sections = []
         for key, header in headers.items():
             items = getattr(self, key)
@@ -114,7 +142,7 @@ def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
 
 
 
-def build_summary(chunks: List[str]) -> Summary:
+def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
     config: LLMConfig = get_llm_cfg()
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.max_workers) as executor:
         summary_chunks = list(executor.map(summarize_chunk, chunks))
@@ -135,7 +163,15 @@ def build_summary(chunks: List[str]) -> Summary:
             'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks)
         }]
     )
-    summary_dict = _parse_json(str(response.choices[0].message.content))
+    try:
+        summary_dict = _parse_json(str(response.choices[0].message.content))
+    except (json.JSONDecodeError, ValueError) as e:
+        if _attempt + 1 >= config.max_parse_attempts:
+            logger.error(f"Failed to parse LLM output after {_attempt + 1} attempts: {e}")
+            raise
+        logger.warning(f'JSON parse error (attempt {_attempt}, retrying LLM call: {e}')
+        time.sleep(0.5 * (_attempt + 1))
+        return build_summary(chunks, _attempt + 1)
     logger.debug("Reduce response: %s", summary_dict)
     summary = Summary(
         title=summary_dict.get('title', 'Meeting Summary'),

@@ -1,4 +1,6 @@
 import io
+import sys
+from unittest.mock import MagicMock
 
 import pytest
 from starlette.datastructures import UploadFile
@@ -43,26 +45,27 @@ class TestCheckFile:
 
     @pytest.mark.asyncio
     async def test_accepts_audio(self, monkeypatch):
-        import magic
-        # libmagic для WAV отдаёт audio/x-wav — именно этот кейс нас ронял
-        monkeypatch.setattr(magic, "from_file", lambda *a, **k: "audio/x-wav")
+        mock_magic = MagicMock()
+        mock_magic.from_file.return_value = "audio/x-wav"
+        monkeypatch.setitem(sys.modules, 'magic', mock_magic)
         monkeypatch.setattr("eden_summary.core.guards.is_audio", lambda p: True)
         f = UploadFile(filename="meeting.wav", file=io.BytesIO(b"RIFF...."))
         assert await check_file(f) is True
 
     @pytest.mark.asyncio
     async def test_rejects_non_media_mime(self, monkeypatch):
-        import magic
-        monkeypatch.setattr(magic, "from_file", lambda *a, **k: "image/png")
+        mock_magic = MagicMock()
+        mock_magic.from_file.return_value = "image/png"
+        monkeypatch.setitem(sys.modules, 'magic', mock_magic)
         monkeypatch.setattr("eden_summary.core.guards.is_audio", lambda p: True)
         f = UploadFile(filename="evil.png", file=io.BytesIO(b"\x89PNG"))
         assert await check_file(f) is False
 
     @pytest.mark.asyncio
     async def test_rejects_when_no_audio_stream(self, monkeypatch):
-        import magic
-        # magic думает что аудио, но ffprobe не нашёл аудиострим
-        monkeypatch.setattr(magic, "from_file", lambda *a, **k: "audio/x-wav")
+        mock_magic = MagicMock()
+        mock_magic.from_file.return_value = "audio/x-wav"
+        monkeypatch.setitem(sys.modules, 'magic', mock_magic)
         monkeypatch.setattr("eden_summary.core.guards.is_audio", lambda p: False)
         f = UploadFile(filename="fake.wav", file=io.BytesIO(b"not audio"))
         assert await check_file(f) is False

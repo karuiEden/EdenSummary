@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 explicit_package_bases = true
 
 [tool.ruff]
