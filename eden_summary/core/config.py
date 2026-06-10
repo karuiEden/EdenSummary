@@ -46,6 +46,7 @@ class CeleryConfig(BaseSettings):
     redis_password: str = Field(validation_alias='REDIS_PASSWORD')
     timeout_grace: int = Field(default=300, validation_alias='JOB_TIMEOUT_GRACE')
     soft_timeout: int = Field(default=21600, validation_alias='JOB_SOFT_TIMEOUT')
+    reaper_stale_seconds: int = Field(default=1800, validation_alias='REAPER_STALE_SECONDS')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
     @property

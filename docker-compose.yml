@@ -35,7 +35,7 @@ services:
          condition: service_completed_successfully
       createbuckets:
         condition: service_completed_successfully
-    command: uv run celery -A eden_summary.worker.worker worker --loglevel=info -E
+    command: uv run celery -A eden_summary.worker.worker worker --loglevel=info -E -B
     env_file:
       - .env
     volumes:
