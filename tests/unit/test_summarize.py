@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk
+from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, _render_item
 
 
 def _fake_response(content: str) -> MagicMock:
@@ -98,6 +98,42 @@ class TestSummaryToText:
     def test_to_text_none_lang_falls_back_to_default(self):
         s = self._full()
         assert s.to_text(None) == s.to_text()
+
+
+class TestStructuredActionItems:
+    # LLM возвращает action_items словарями {task, who, deadline} — to_text должен
+    # рендерить их в читаемую строку, отбрасывая плейсхолдеры ('unspecified' и т.п.)
+    def _with_actions(self, action_items):
+        return Summary(title="T", tldr=[], decisions=[],
+                       action_items=action_items, risks=[])
+
+    def test_dict_with_who_and_deadline(self):
+        s = self._with_actions([{'task': 'work on designs', 'who': 'industrial designer', 'deadline': 'next meeting'}])
+        assert "- work on designs (industrial designer; by next meeting)" in s.to_text('en')
+
+    def test_placeholder_who_is_dropped(self):
+        s = self._with_actions([{'task': 'work on designs', 'who': 'unspecified', 'deadline': 'next meeting'}])
+        text = s.to_text('en')
+        assert "- work on designs (by next meeting)" in text
+        assert "unspecified" not in text
+
+    def test_task_only_no_meta(self):
+        text = self._with_actions([{'task': 'do the thing', 'who': 'unspecified', 'deadline': 'n/a'}]).to_text('en')
+        assert "- do the thing" in text
+        assert "(" not in text
+
+    def test_mixed_string_and_dict(self):
+        text = self._with_actions(["plain task", {'task': 'structured', 'who': 'bob'}]).to_text('en')
+        assert "- plain task" in text
+        assert "- structured (bob)" in text
+
+    def test_all_placeholder_dict_renders_empty_and_section_skipped(self):
+        text = self._with_actions([{'who': 'unspecified', 'deadline': 'n/a'}]).to_text('en')
+        assert "Action Items" not in text
+
+    def test_render_item_plain_string_passthrough(self):
+        assert _render_item("just text") == "just text"
+
 
 class TestSummarizeChunkRetry:
 
