@@ -35,7 +35,7 @@ services:
          condition: service_completed_successfully
       createbuckets:
         condition: service_completed_successfully
-    command: uv run celery -A eden_summary.worker.worker worker --loglevel=info -E -B
+    command: uv run --no-sync celery -A eden_summary.worker.worker worker --loglevel=info -E -B
     env_file:
       - .env
     volumes:
@@ -81,7 +81,7 @@ services:
     restart: unless-stopped
   migrate:
     build: .
-    command: uv run alembic upgrade head
+    command: uv run --no-sync alembic upgrade head
     env_file: .env
     depends_on:
       db:
@@ -162,7 +162,7 @@ services:
   flower:
     build: .
     container_name: flower
-    command: uv run celery -A eden_summary.worker.worker flower --port=5555
+    command: uv run --no-sync celery -A eden_summary.worker.worker flower --port=5555
     environment:
       FLOWER_BASIC_AUTH: ${FLOWER_USER}:${FLOWER_PASSWORD}
     ports:

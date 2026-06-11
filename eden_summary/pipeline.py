@@ -47,8 +47,8 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="Audio conversion failed")
         job_terminal_total.labels(status='failed').inc()
         return
-    job.artifacts['preprocessed'] = f'{job_id}/preprocessed.wav'
-    await update_job(job_id, db_session, status=JobStatus.ASR_RUNNING, artifacts=job.artifacts)
+    artifacts = {**job.artifacts, 'preprocessed': f'{job_id}/preprocessed.wav'}
+    await update_job(job_id, db_session, status=JobStatus.ASR_RUNNING, artifacts=artifacts)
     try:
         logger.info('Transcription started', extra={"job_id": job_id})
         asr_start = time.monotonic()
@@ -89,8 +89,8 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         tmp.write(summary.to_text(detected_lang))
         tmp.flush()
         upload_file(tmp.name, f'{job_id}/summary.txt')
-    job.artifacts['summary'] = f'{job_id}/summary.txt'
-    await update_job(job_id, db_session, artifacts=job.artifacts)
+    artifacts = {**job.artifacts, 'summary': f'{job_id}/summary.txt'}
+    await update_job(job_id, db_session, artifacts=artifacts)
     try:
         logger.info('Email sending started', extra={"job_id": job_id})
         send_email(recipients=job.emails, subject=summary.title, body=summary.to_text(detected_lang))

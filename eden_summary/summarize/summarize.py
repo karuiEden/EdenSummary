@@ -78,6 +78,41 @@ def _primary_subtag(bcp47: str | None) -> str | None:
         return None
     return bcp47.split('-')[0].lower()
 
+
+_PLACEHOLDERS = {'', 'unspecified', 'none', 'n/a', 'na', 'tbd',
+                 'not specified', 'not mentioned', 'unknown', 'null'}
+
+
+def _clean(value: object) -> str | None:
+    """Strip a value to text, treating placeholder fillers as absent."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text.lower() not in _PLACEHOLDERS else None
+
+
+def _render_item(item: object) -> str:
+    """Render a list item that may be a plain string or a structured dict
+    (e.g. action items as {task, who, deadline}) into one readable line."""
+    if isinstance(item, dict):
+        task = _clean(item.get('task') or item.get('action')
+                      or item.get('item') or item.get('description'))
+        if task is None:
+            # unknown dict shape — join whatever non-placeholder values remain
+            return ', '.join(v for v in (_clean(x) for x in item.values()) if v)
+        who = _clean(item.get('who') or item.get('owner')
+                     or item.get('assignee') or item.get('responsible'))
+        deadline = _clean(item.get('deadline') or item.get('due')
+                          or item.get('by') or item.get('when'))
+        meta = []
+        if who:
+            meta.append(who)
+        if deadline:
+            meta.append(f'by {deadline}')
+        return f'{task} ({"; ".join(meta)})' if meta else task
+    return str(item).strip()
+
+
 @dataclass(frozen=True)
 class Summary:
     title: str
@@ -94,7 +129,10 @@ class Summary:
             items = getattr(self, key)
             if not items:
                 continue
-            section = [header] + [f"- {item}" for item in items]
+            rendered = [text for text in (_render_item(item) for item in items) if text]
+            if not rendered:
+                continue
+            section = [header] + [f"- {text}" for text in rendered]
             sections.append("\n".join(section))
         return "\n\n".join(sections)
 
