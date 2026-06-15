@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, build_summary, _render_item, _extract_numbers
+from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, _render_item, _extract_numbers
 
 
 def _fake_response(content: str) -> MagicMock:
@@ -172,38 +172,18 @@ class TestExtractNumbers:
         assert _extract_numbers("no figures were mentioned here") == []
 
 
-class TestNumericAnchoring:
+class TestExtractNumbersParked:
+    # _extract_numbers оставлен как заготовка (см. docs/ml-experiments.md Q1a),
+    # но НЕ должен попадать в промпты — проводка anchoring откачена.
     @patch("eden_summary.summarize.summarize.get_llm_cfg")
     @patch("eden_summary.summarize.summarize.completion")
-    def test_chunk_prompt_includes_extracted_numbers(self, mock_completion, mock_cfg):
+    def test_chunk_prompt_has_no_numeric_anchoring(self, mock_completion, mock_cfg):
         mock_completion.return_value = _fake_response('{"decisions": []}')
         mock_cfg.return_value.max_parse_attempts = 3
         summarize_chunk("the price is 25 euros and profit 15 million")
         sent = mock_completion.call_args.kwargs["messages"][1]["content"]
-        assert "25 euros" in sent
-        assert "15 million" in sent
-
-    @patch("eden_summary.summarize.summarize.get_llm_cfg")
-    @patch("eden_summary.summarize.summarize.completion")
-    def test_reduce_prompt_includes_global_numbers(self, mock_completion, mock_cfg):
-        mock_completion.return_value = _fake_response(
-            '{"title":"t","tldr":[],"decisions":[],"action_items":[],"risks":[]}')
-        mock_cfg.return_value.max_parse_attempts = 3
-        mock_cfg.return_value.max_workers = 1
-        build_summary(["chunk one mentions 25 euros", "chunk two mentions 50%"])
-        # последний вызов completion — это reduce-шаг
-        reduce_sent = mock_completion.call_args.kwargs["messages"][1]["content"]
-        assert "25 euros" in reduce_sent
-        assert "50%" in reduce_sent
-
-    @patch("eden_summary.summarize.summarize.get_llm_cfg")
-    @patch("eden_summary.summarize.summarize.completion")
-    def test_no_numbers_renders_none(self, mock_completion, mock_cfg):
-        mock_completion.return_value = _fake_response('{"decisions": []}')
-        mock_cfg.return_value.max_parse_attempts = 3
-        summarize_chunk("no figures mentioned at all")
-        sent = mock_completion.call_args.kwargs["messages"][1]["content"]
-        assert "present in this fragment: none" in sent
+        assert "Numeric facts" not in sent
+        assert "use ONLY" not in sent.lower() and "copy a value" not in sent
 
 
 class TestSummarizeChunkRetry:

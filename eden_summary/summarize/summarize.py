@@ -30,8 +30,12 @@ _NUMBER_PATTERNS = [
 def _extract_numbers(text: str) -> list[str]:
     """Extract salient numeric facts (money, magnitudes, percentages, times,
     decimals) as their exact surface strings, de-duplicated and in order of
-    appearance. Used to anchor the summary so the LLM reuses real numbers
-    instead of inventing them."""
+    appearance.
+
+    PARKED: not currently wired into the prompts. A first attempt at "numeric
+    anchoring" (injecting these with a hard "use ONLY these values" constraint)
+    measurably hurt faithfulness — see docs/ml-experiments.md (Q1a). Kept as the
+    building block for a future positively-framed variant."""
     spans = []
     for pattern in _NUMBER_PATTERNS:
         for match in pattern.finditer(text):
@@ -51,12 +55,6 @@ def _extract_numbers(text: str) -> list[str]:
             seen.add(norm.lower())
             out.append(norm)
     return out
-
-
-def _numbers_clause(text: str) -> str:
-    """Comma-joined numeric facts for prompt anchoring, or 'none' when absent."""
-    numbers = _extract_numbers(text)
-    return ', '.join(numbers) if numbers else 'none'
 
 
 SYSTEM_PROMPT: str = """ You are a business meeting analyst.                                                                                                                                                                    
@@ -80,10 +78,6 @@ CHUNK_USER_PROMPT: str = """Analyze the following meeting transcript fragment an
 Transcript fragment:
 {chunk}
 
-Numeric facts present in this fragment: {numbers}
-When an item involves a number (price, amount, percentage, date, time), copy a value
-from this list EXACTLY. Never state a number that is not in this list.
-
 Omit any item you cannot directly quote from the fragment (omission scores 0; fabrication scores −4).
 """
 
@@ -100,10 +94,6 @@ Fields to produce:
 
 Chunk analyses:
 {chunks}
-
-Numeric facts present in the transcript: {numbers}
-When an item involves a number, copy a value from this list EXACTLY.
-Never introduce a number that is not in this list.
 
 Omit any item you cannot directly quote from the chunk analyses (omission scores 0; fabrication scores −4).
 """
@@ -218,7 +208,7 @@ def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
         },
         {
             'role': 'user',
-            'content': CHUNK_USER_PROMPT.format(chunk=chunk, numbers=_numbers_clause(chunk))
+            'content': CHUNK_USER_PROMPT.format(chunk=chunk)
         }]
     )
     try:
@@ -251,7 +241,7 @@ def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
         },
         {
             'role': 'user',
-            'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks, numbers=_numbers_clause(' '.join(chunks)))
+            'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks)
         }]
     )
     try:
