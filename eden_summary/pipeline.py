@@ -12,8 +12,8 @@ from eden_summary.core import Job, JobStatus, update_job
 from eden_summary.email_service import send_email
 from eden_summary.metrics import job_stage_seconds, asr_processing_ratio, job_terminal_total
 from eden_summary.storage import upload_file, download_file
-from eden_summary.summarize import build_summary, Summary
-from eden_summary.transcribe import chunk_segments, transcribe, convert_to_wav, get_duration, Transcription
+from eden_summary.summarize import summarize_transcript, Summary
+from eden_summary.transcribe import transcribe, convert_to_wav, get_duration, Transcription
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +72,11 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="Transcription returned empty result")
         job_terminal_total.labels(status='failed').inc()
         return
-    chunks: List[str] = chunk_segments(segments)
     await update_job(job_id, db_session, status=JobStatus.SUMMARY_RUNNING)
     try:
         logger.info('LLM summarization started', extra={"job_id": job_id})
         summarize_start = time.monotonic()
-        summary: Summary = await asyncio.to_thread(build_summary, chunks)
+        summary: Summary = await asyncio.to_thread(summarize_transcript, segments)
         job_stage_seconds.labels(stage='summarize').observe(time.monotonic() - summarize_start)
         logger.info('LLM summarization done', extra={"job_id": job_id})
     except Exception:

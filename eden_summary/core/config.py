@@ -26,6 +26,7 @@ class LLMConfig(BaseSettings):
     timeout: int = Field(validation_alias='LLM_TIMEOUT')
     max_parse_attempts: int = Field(validation_alias='LLM_PARSE_MAX_ATTEMPTS')
     max_workers: int = Field(default=5, validation_alias='LLM_MAX_WORKERS')
+    single_pass_token_limit: int = Field(default=32000, validation_alias='LLM_SINGLE_PASS_TOKEN_LIMIT')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 class SMTPConfig(BaseSettings):

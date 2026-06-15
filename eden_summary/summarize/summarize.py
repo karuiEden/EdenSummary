@@ -9,6 +9,7 @@ from typing import List
 from litellm import completion
 
 from eden_summary.core import LLMConfig, get_llm_cfg
+from eden_summary.transcribe import chunk_segments
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,24 @@ Chunk analyses:
 {chunks}
 
 Omit any item you cannot directly quote from the chunk analyses (omission scores 0; fabrication scores −4).
+"""
+
+SINGLE_PASS_PROMPT: str = """Analyze the following complete meeting transcript and produce a structured summary.
+
+Pay equal attention to the beginning, middle, and end of the meeting — important decisions
+and action items are often raised in the middle of a discussion and must not be dropped.
+
+Fields to produce:
+- title: short meeting title, max 8 words, based on the main topic discussed
+- tldr: 3-5 bullet points summarizing the entire meeting
+- decisions: concrete decisions that were made
+- action_items: specific tasks assigned to someone, include who and deadline if mentioned
+- risks: problems, blockers, or open questions raised
+
+Transcript:
+{transcript}
+
+Omit any item you cannot directly quote from the transcript (omission scores 0; fabrication scores −4).
 """
 
 _DEFAULT_LOCALE = 'ru'
@@ -193,6 +212,20 @@ def _parse_json(text: str) -> dict:
         raise ValueError('JSON object not found')
     return json.loads(text[start:end+1])
 
+def _dict_to_summary(summary_dict: dict) -> Summary:
+    return Summary(
+        title=summary_dict.get('title', 'Meeting Summary'),
+        tldr=_ensure_list(summary_dict.get('tldr', [])),
+        decisions=_ensure_list(summary_dict.get('decisions', [])),
+        action_items=_ensure_list(summary_dict.get('action_items', [])),
+        risks=_ensure_list(summary_dict.get('risks', [])),
+    )
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate (~4 chars/token for English) — enough to choose
+    single-pass vs map-reduce without pulling in a tokenizer dependency."""
+    return len(text) // 4
+
 def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
     config: LLMConfig = get_llm_cfg()
     response = completion(
@@ -254,11 +287,50 @@ def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
         time.sleep(0.5 * (_attempt + 1))
         return build_summary(chunks, _attempt + 1)
     logger.debug("Reduce response: %s", summary_dict)
-    summary = Summary(
-        title=summary_dict.get('title', 'Meeting Summary'),
-        tldr=_ensure_list(summary_dict.get('tldr', [])),
-        decisions=_ensure_list(summary_dict.get('decisions', [])),
-        action_items=_ensure_list(summary_dict.get('action_items', [])),
-        risks=_ensure_list(summary_dict.get('risks', [])),
+    return _dict_to_summary(summary_dict)
+
+
+def _summarize_single_pass(transcript: str, _attempt: int = 0) -> Summary:
+    """Summarize the whole transcript in one LLM call (no map-reduce). Used when
+    the transcript fits the model context — avoids the information loss that the
+    map→reduce boundary introduces (see docs/ml-experiments.md, Q1a)."""
+    config: LLMConfig = get_llm_cfg()
+    response = completion(
+        model=config.model,
+        api_key=config.api_key,
+        api_base=config.api_base,
+        max_retries=config.max_retries,
+        temperature=config.temperature,
+        timeout=config.timeout,
+        messages=[{
+            'role': 'system',
+            'content': SYSTEM_PROMPT
+        },
+        {
+            'role': 'user',
+            'content': SINGLE_PASS_PROMPT.format(transcript=transcript)
+        }]
     )
-    return summary
+    try:
+        summary_dict = _parse_json(str(response.choices[0].message.content))
+    except (json.JSONDecodeError, ValueError) as e:
+        if _attempt + 1 >= config.max_parse_attempts:
+            logger.error(f"Failed to parse LLM output after {_attempt + 1} attempts: {e}")
+            raise
+        logger.warning(f'JSON parse error (attempt {_attempt}, retrying LLM call: {e}')
+        time.sleep(0.5 * (_attempt + 1))
+        return _summarize_single_pass(transcript, _attempt + 1)
+    return _dict_to_summary(summary_dict)
+
+
+def summarize_transcript(segments: List[str]) -> Summary:
+    """Summarize a transcript. Single pass when it fits the model context,
+    map-reduce as the fallback for longer transcripts."""
+    config: LLMConfig = get_llm_cfg()
+    full_text = '\n'.join(segments)
+    estimated = _estimate_tokens(full_text)
+    if estimated <= config.single_pass_token_limit:
+        logger.info("Summarizing in a single pass (~%d tokens)", estimated)
+        return _summarize_single_pass(full_text)
+    logger.info("Transcript ~%d tokens exceeds single-pass limit; using map-reduce", estimated)
+    return build_summary(chunk_segments(segments))

@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, _render_item, _extract_numbers
+from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, _render_item, _extract_numbers, summarize_transcript, _estimate_tokens
 
 
 def _fake_response(content: str) -> MagicMock:
@@ -184,6 +184,43 @@ class TestExtractNumbersParked:
         sent = mock_completion.call_args.kwargs["messages"][1]["content"]
         assert "Numeric facts" not in sent
         assert "use ONLY" not in sent.lower() and "copy a value" not in sent
+
+
+class TestSummarizeTranscriptRouting:
+    # summarize_transcript: single pass when the transcript fits, map-reduce otherwise.
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_short_transcript_uses_single_pass(self, mock_completion, mock_cfg):
+        mock_completion.return_value = _fake_response(
+            '{"title":"t","tldr":[],"decisions":["d"],"action_items":[],"risks":[]}')
+        cfg = mock_cfg.return_value
+        cfg.max_parse_attempts = 3
+        cfg.single_pass_token_limit = 32000
+        result = summarize_transcript(["a short meeting transcript"])
+        assert mock_completion.call_count == 1  # one call, no map-reduce
+        sent = mock_completion.call_args.kwargs["messages"][1]["content"]
+        assert "complete meeting transcript" in sent  # SINGLE_PASS_PROMPT used
+        assert result.decisions == ["d"]
+
+    @patch("eden_summary.summarize.summarize.chunk_segments")
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_long_transcript_falls_back_to_map_reduce(self, mock_completion, mock_cfg, mock_chunk):
+        mock_completion.return_value = _fake_response(
+            '{"title":"t","tldr":[],"decisions":[],"action_items":[],"risks":[]}')
+        cfg = mock_cfg.return_value
+        cfg.max_parse_attempts = 3
+        cfg.max_workers = 1
+        cfg.single_pass_token_limit = 1  # force the map-reduce fallback
+        mock_chunk.return_value = ["chunk one", "chunk two"]
+        summarize_transcript(["some long transcript text well over the limit"])
+        assert mock_completion.call_count == 3  # 2 map + 1 reduce
+        mock_chunk.assert_called_once()
+        all_sent = " ".join(c.kwargs["messages"][1]["content"] for c in mock_completion.call_args_list)
+        assert "Pay equal attention" not in all_sent  # single-pass prompt not used
+
+    def test_estimate_tokens_roughly_quarter_of_chars(self):
+        assert _estimate_tokens("a" * 400) == 100
 
 
 class TestSummarizeChunkRetry:

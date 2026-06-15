@@ -1,1 +1,6 @@
-from .summarize import Summary as Summary, summarize_chunk as summarize_chunk, build_summary as build_summary
+from .summarize import (
+    Summary as Summary,
+    summarize_chunk as summarize_chunk,
+    build_summary as build_summary,
+    summarize_transcript as summarize_transcript,
+)
