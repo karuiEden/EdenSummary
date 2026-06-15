@@ -223,6 +223,29 @@ class TestSummarizeTranscriptRouting:
         assert _estimate_tokens("a" * 400) == 100
 
 
+class TestJsonMode:
+    # native JSON output: response_format is sent when json_mode is on, omitted when off.
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_json_mode_on_passes_response_format(self, mock_completion, mock_cfg):
+        mock_completion.return_value = _fake_response('{"decisions": []}')
+        cfg = mock_cfg.return_value
+        cfg.max_parse_attempts = 3
+        cfg.json_mode = True
+        summarize_chunk("some transcript")
+        assert mock_completion.call_args.kwargs["response_format"] == {"type": "json_object"}
+
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_json_mode_off_omits_response_format(self, mock_completion, mock_cfg):
+        mock_completion.return_value = _fake_response('{"decisions": []}')
+        cfg = mock_cfg.return_value
+        cfg.max_parse_attempts = 3
+        cfg.json_mode = False
+        summarize_chunk("some transcript")
+        assert "response_format" not in mock_completion.call_args.kwargs
+
+
 class TestSummarizeChunkRetry:
 
     @patch(

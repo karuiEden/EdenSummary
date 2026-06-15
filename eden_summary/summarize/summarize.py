@@ -226,26 +226,35 @@ def _estimate_tokens(text: str) -> int:
     single-pass vs map-reduce without pulling in a tokenizer dependency."""
     return len(text) // 4
 
-def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
+def _complete(messages: list[dict]) -> str:
+    """Single entry point for LLM calls. Centralizes the shared completion kwargs
+    and, when json_mode is on, requests native JSON output (response_format) so
+    the model cannot return non-JSON — the _parse_json retry below stays only as
+    a safety net. JSON mode requires the word 'json' to appear in the prompt;
+    SYSTEM_PROMPT already instructs 'Return ONLY valid JSON'."""
     config: LLMConfig = get_llm_cfg()
-    response = completion(
+    kwargs: dict = dict(
         model=config.model,
         api_key=config.api_key,
         api_base=config.api_base,
         max_retries=config.max_retries,
         timeout=config.timeout,
         temperature=config.temperature,
-        messages=[{
-            'role': 'system',
-            'content': SYSTEM_PROMPT
-        },
-        {
-            'role': 'user',
-            'content': CHUNK_USER_PROMPT.format(chunk=chunk)
-        }]
+        messages=messages,
     )
+    if config.json_mode:
+        kwargs['response_format'] = {'type': 'json_object'}
+    response = completion(**kwargs)
+    return str(response.choices[0].message.content)
+
+def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
+    config: LLMConfig = get_llm_cfg()
+    content = _complete([
+        {'role': 'system', 'content': SYSTEM_PROMPT},
+        {'role': 'user', 'content': CHUNK_USER_PROMPT.format(chunk=chunk)},
+    ])
     try:
-        return _parse_json(str(response.choices[0].message.content))
+        return _parse_json(content)
     except (json.JSONDecodeError, ValueError) as e:
         if _attempt + 1 >= config.max_parse_attempts:
             logger.error(f"Failed to parse LLM output after {_attempt + 1} attempts: {e}")
@@ -261,24 +270,12 @@ def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.max_workers) as executor:
         summary_chunks = list(executor.map(summarize_chunk, chunks))
 
-    response = completion(
-        model=config.model,
-        api_key=config.api_key,
-        api_base=config.api_base,
-        max_retries=config.max_retries,
-        temperature=config.temperature,
-        timeout=config.timeout,
-        messages=[{
-            'role': 'system',
-            'content': SYSTEM_PROMPT
-        },
-        {
-            'role': 'user',
-            'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks)
-        }]
-    )
+    content = _complete([
+        {'role': 'system', 'content': SYSTEM_PROMPT},
+        {'role': 'user', 'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks)},
+    ])
     try:
-        summary_dict = _parse_json(str(response.choices[0].message.content))
+        summary_dict = _parse_json(content)
     except (json.JSONDecodeError, ValueError) as e:
         if _attempt + 1 >= config.max_parse_attempts:
             logger.error(f"Failed to parse LLM output after {_attempt + 1} attempts: {e}")
@@ -295,24 +292,12 @@ def _summarize_single_pass(transcript: str, _attempt: int = 0) -> Summary:
     the transcript fits the model context — avoids the information loss that the
     map→reduce boundary introduces (see docs/ml-experiments.md, Q1a)."""
     config: LLMConfig = get_llm_cfg()
-    response = completion(
-        model=config.model,
-        api_key=config.api_key,
-        api_base=config.api_base,
-        max_retries=config.max_retries,
-        temperature=config.temperature,
-        timeout=config.timeout,
-        messages=[{
-            'role': 'system',
-            'content': SYSTEM_PROMPT
-        },
-        {
-            'role': 'user',
-            'content': SINGLE_PASS_PROMPT.format(transcript=transcript)
-        }]
-    )
+    content = _complete([
+        {'role': 'system', 'content': SYSTEM_PROMPT},
+        {'role': 'user', 'content': SINGLE_PASS_PROMPT.format(transcript=transcript)},
+    ])
     try:
-        summary_dict = _parse_json(str(response.choices[0].message.content))
+        summary_dict = _parse_json(content)
     except (json.JSONDecodeError, ValueError) as e:
         if _attempt + 1 >= config.max_parse_attempts:
             logger.error(f"Failed to parse LLM output after {_attempt + 1} attempts: {e}")
