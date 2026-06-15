@@ -49,14 +49,30 @@ def transcribe(audio_path: Path, language: str | None) -> Transcription:
 
 
 def chunk_segments(segments: List[str]) -> List[str]:
-    max_chars = get_whisper_cfg().chunk_max_chars
-    chunk = ''
-    chunks = []
+    cfg = get_whisper_cfg()
+    max_chars = cfg.chunk_max_chars
+    overlap_chars = cfg.chunk_overlap_chars
+    chunks: List[str] = []
+    current: List[str] = []
+    current_len = 0
+    new_since_flush = False
     for segment in segments:
-        chunk += segment
-        if len(chunk) >= max_chars:
-            chunks.append(chunk)
-            chunk = ''
-    if chunk != '':
-        chunks.append(chunk)
+        current.append(segment)
+        current_len += len(segment)
+        new_since_flush = True
+        if current_len >= max_chars:
+            chunks.append(''.join(current))
+            new_since_flush = False
+            # seed the next chunk with the trailing ~overlap_chars of segments
+            overlap: List[str] = []
+            overlap_len = 0
+            for seg in reversed(current):
+                if overlap_len >= overlap_chars:
+                    break
+                overlap.insert(0, seg)
+                overlap_len += len(seg)
+            current = overlap
+            current_len = overlap_len
+    if current and new_since_flush:
+        chunks.append(''.join(current))
     return chunks

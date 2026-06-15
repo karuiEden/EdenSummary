@@ -12,7 +12,8 @@ class WhisperConfig(BaseSettings):
     lang: str | None = Field(default=None, validation_alias='WHISPER_LANGUAGE')
     api_key: str = Field(validation_alias='WHISPER_API_KEY')
     api_base: str = Field(validation_alias='WHISPER_API_BASE')
-    chunk_max_chars: int = Field(default=4000, validation_alias='MAX_CHARS')
+    chunk_max_chars: int = Field(default=8000, validation_alias='MAX_CHARS')
+    chunk_overlap_chars: int = Field(default=1200, validation_alias='CHUNK_OVERLAP_CHARS')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 

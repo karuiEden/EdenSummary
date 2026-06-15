@@ -1,6 +1,7 @@
 import concurrent.futures
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import List
@@ -10,6 +11,52 @@ from litellm import completion
 from eden_summary.core import LLMConfig, get_llm_cfg
 
 logger = logging.getLogger(__name__)
+
+
+_NUM = r'\d[\d,]*(?:\.\d+)?'
+_NUMBER_PATTERNS = [
+    re.compile(rf'[€$£]\s?{_NUM}'),                                                # €25, $1,000.50
+    re.compile(rf'{_NUM}\s*%'),                                                    # 50%
+    re.compile(rf'{_NUM}\s+percent', re.I),                                        # 20 percent
+    re.compile(rf'{_NUM}\s+(?:hundred|thousand|million|billion|trillion)'
+               rf'(?:\s+(?:euros?|dollars?|pounds?|cents?))?', re.I),             # 15 million euro
+    re.compile(rf'{_NUM}\s+(?:euros?|dollars?|pounds?|cents?|usd|eur|gbp)', re.I), # 25 euros, 12.50 euros
+    re.compile(r'\b\d{1,2}:\d{2}\b'),                                              # 10:30
+    re.compile(r'\b\d+\.\d+\b'),                                                   # 12.50
+    re.compile(r'\b\d{1,3}(?:,\d{3})+\b'),                                         # 1,000
+]
+
+
+def _extract_numbers(text: str) -> list[str]:
+    """Extract salient numeric facts (money, magnitudes, percentages, times,
+    decimals) as their exact surface strings, de-duplicated and in order of
+    appearance. Used to anchor the summary so the LLM reuses real numbers
+    instead of inventing them."""
+    spans = []
+    for pattern in _NUMBER_PATTERNS:
+        for match in pattern.finditer(text):
+            spans.append((match.start(), match.end(), match.group()))
+    spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
+    selected = []
+    last_end = -1
+    for start, end, raw in spans:
+        if start >= last_end:
+            selected.append(raw)
+            last_end = end
+    out: list[str] = []
+    seen = set()
+    for raw in selected:
+        norm = re.sub(r'\s+', ' ', raw.strip())
+        if norm.lower() not in seen:
+            seen.add(norm.lower())
+            out.append(norm)
+    return out
+
+
+def _numbers_clause(text: str) -> str:
+    """Comma-joined numeric facts for prompt anchoring, or 'none' when absent."""
+    numbers = _extract_numbers(text)
+    return ', '.join(numbers) if numbers else 'none'
 
 
 SYSTEM_PROMPT: str = """ You are a business meeting analyst.                                                                                                                                                                    
@@ -33,6 +80,9 @@ CHUNK_USER_PROMPT: str = """Analyze the following meeting transcript fragment an
 Transcript fragment:
 {chunk}
 
+Numeric facts present in this fragment: {numbers}
+When an item involves a number (price, amount, percentage, date, time), copy a value
+from this list EXACTLY. Never state a number that is not in this list.
 
 Omit any item you cannot directly quote from the fragment (omission scores 0; fabrication scores −4).
 """
@@ -51,8 +101,11 @@ Fields to produce:
 Chunk analyses:
 {chunks}
 
+Numeric facts present in the transcript: {numbers}
+When an item involves a number, copy a value from this list EXACTLY.
+Never introduce a number that is not in this list.
 
-Omit any item you cannot directly quote from the fragment (omission scores 0; fabrication scores −4).
+Omit any item you cannot directly quote from the chunk analyses (omission scores 0; fabrication scores −4).
 """
 
 _DEFAULT_LOCALE = 'ru'
@@ -165,7 +218,7 @@ def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
         },
         {
             'role': 'user',
-            'content': CHUNK_USER_PROMPT.format(chunk=chunk)
+            'content': CHUNK_USER_PROMPT.format(chunk=chunk, numbers=_numbers_clause(chunk))
         }]
     )
     try:
@@ -198,7 +251,7 @@ def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
         },
         {
             'role': 'user',
-            'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks)
+            'content': REDUCE_USER_PROMPT.format(chunks=summary_chunks, numbers=_numbers_clause(' '.join(chunks)))
         }]
     )
     try:

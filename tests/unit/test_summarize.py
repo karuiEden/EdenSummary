@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, _render_item
+from eden_summary.summarize.summarize import _parse_json, _ensure_list, Summary, summarize_chunk, build_summary, _render_item, _extract_numbers
 
 
 def _fake_response(content: str) -> MagicMock:
@@ -133,6 +133,77 @@ class TestStructuredActionItems:
 
     def test_render_item_plain_string_passthrough(self):
         assert _render_item("just text") == "just text"
+
+
+class TestExtractNumbers:
+    # реальные кейсы из транскрипта AMI IS1000a
+    def test_currency_word(self):
+        assert _extract_numbers("selling price will be about 25 euros each") == ["25 euros"]
+
+    def test_decimal_currency(self):
+        assert _extract_numbers("production cost is 12.50 euros") == ["12.50 euros"]
+
+    def test_magnitude_with_currency(self):
+        assert _extract_numbers("profit aim, about 15 million euro") == ["15 million euro"]
+
+    def test_magnitude_bare(self):
+        assert _extract_numbers("we have to sell at least 4 million") == ["4 million"]
+
+    def test_currency_symbol(self):
+        assert _extract_numbers("it costs €25 total") == ["€25"]
+
+    def test_percentage(self):
+        assert _extract_numbers("margin of 50% and 20 percent growth") == ["50%", "20 percent"]
+
+    def test_comma_grouped_and_time(self):
+        assert _extract_numbers("1,000 units by 10:30") == ["1,000", "10:30"]
+
+    def test_decimal_not_split_from_currency(self):
+        # "12.50 euros" — один факт, не "12.50" + "12.50 euros"
+        assert _extract_numbers("12.50 euros") == ["12.50 euros"]
+
+    def test_dedup_preserves_first(self):
+        assert _extract_numbers("25 euros now, still 25 euros later") == ["25 euros"]
+
+    def test_order_preserved(self):
+        assert _extract_numbers("first 25 euros then 15 million") == ["25 euros", "15 million"]
+
+    def test_no_numbers(self):
+        assert _extract_numbers("no figures were mentioned here") == []
+
+
+class TestNumericAnchoring:
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_chunk_prompt_includes_extracted_numbers(self, mock_completion, mock_cfg):
+        mock_completion.return_value = _fake_response('{"decisions": []}')
+        mock_cfg.return_value.max_parse_attempts = 3
+        summarize_chunk("the price is 25 euros and profit 15 million")
+        sent = mock_completion.call_args.kwargs["messages"][1]["content"]
+        assert "25 euros" in sent
+        assert "15 million" in sent
+
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_reduce_prompt_includes_global_numbers(self, mock_completion, mock_cfg):
+        mock_completion.return_value = _fake_response(
+            '{"title":"t","tldr":[],"decisions":[],"action_items":[],"risks":[]}')
+        mock_cfg.return_value.max_parse_attempts = 3
+        mock_cfg.return_value.max_workers = 1
+        build_summary(["chunk one mentions 25 euros", "chunk two mentions 50%"])
+        # последний вызов completion — это reduce-шаг
+        reduce_sent = mock_completion.call_args.kwargs["messages"][1]["content"]
+        assert "25 euros" in reduce_sent
+        assert "50%" in reduce_sent
+
+    @patch("eden_summary.summarize.summarize.get_llm_cfg")
+    @patch("eden_summary.summarize.summarize.completion")
+    def test_no_numbers_renders_none(self, mock_completion, mock_cfg):
+        mock_completion.return_value = _fake_response('{"decisions": []}')
+        mock_cfg.return_value.max_parse_attempts = 3
+        summarize_chunk("no figures mentioned at all")
+        sent = mock_completion.call_args.kwargs["messages"][1]["content"]
+        assert "present in this fragment: none" in sent
 
 
 class TestSummarizeChunkRetry:
