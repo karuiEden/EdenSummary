@@ -13,6 +13,12 @@ asr_processing_ratio = Histogram(
     buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0],
 )
 
+quality_guard_seconds = Histogram(
+    'eden_quality_guard_seconds',
+    'Tier 1 inline quality-guard execution time (sub-second budget)',
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5],
+)
+
 job_terminal_total = Counter(
     'eden_job_terminal_total',
     'Jobs by terminal status',

@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import pytest
 
 import eden_summary.transcribe.transcribe_audio as ta

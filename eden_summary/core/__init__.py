@@ -25,6 +25,7 @@ from .job_store import (
     get_status as get_status,
     get_result as get_result,
     update_job as update_job,
+    record_result_edits as record_result_edits,
 )
 from .db import engine as engine, get_session as get_session, AsyncLocalSession as AsyncLocalSession
-from .models import Job as Job
+from .models import Job as Job, JobFieldEdit as JobFieldEdit

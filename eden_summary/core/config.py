@@ -28,7 +28,28 @@ class LLMConfig(BaseSettings):
     max_workers: int = Field(default=5, validation_alias='LLM_MAX_WORKERS')
     single_pass_token_limit: int = Field(default=32000, validation_alias='LLM_SINGLE_PASS_TOKEN_LIMIT')
     json_mode: bool = Field(default=True, validation_alias='LLM_JSON_MODE')
+    # Tier-2 faithfulness judge. Separate model on purpose (summarizer ≠ judge):
+    # a non-summarizer model grades the summary against the transcript. judge_api_*
+    # are optional overrides (e.g. an OpenRouter endpoint); they fall back to the
+    # main LLM credentials when unset.
+    judge_enabled: bool = Field(default=True, validation_alias='LLM_JUDGE_ENABLED')
+    judge_model: str | None = Field(default=None, validation_alias='LLM_JUDGE_MODEL')
+    judge_api_base: str | None = Field(default=None, validation_alias='LLM_JUDGE_API_BASE')
+    judge_api_key: str | None = Field(default=None, validation_alias='LLM_JUDGE_API_KEY')
+    judge_token_limit: int = Field(default=32000, validation_alias='LLM_JUDGE_TOKEN_LIMIT')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+
+    @property
+    def effective_judge_model(self) -> str:
+        return self.judge_model or self.model
+
+    @property
+    def effective_judge_api_base(self) -> str | None:
+        return self.judge_api_base or self.api_base
+
+    @property
+    def effective_judge_api_key(self) -> str:
+        return self.judge_api_key or self.api_key
 
 class SMTPConfig(BaseSettings):
     host: str = Field(validation_alias='SMTP_HOST')

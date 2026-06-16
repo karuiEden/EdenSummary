@@ -139,7 +139,33 @@ Statuses: `queued` → `asr_running` → `summary_running` → `done` / `failed`
 GET /v1/jobs/{job_id}/result
 ```
 
-Available only when status is `done`. Returns the structured summary text.
+Available only when status is `done`. Returns the rendered summary text plus the
+structured summary fields:
+
+```json
+{
+  "job_id": "uuid",
+  "status": "done",
+  "summary": "Decisions\n- ...",
+  "structured": { "title": "...", "tldr": [], "decisions": [], "action_items": [], "risks": [] }
+}
+```
+
+`structured` is `null` for jobs processed before structured output was stored.
+
+### Submit corrections
+
+```
+PATCH /v1/jobs/{job_id}/result
+Content-Type: application/json
+
+{ "title": "...", "tldr": [], "decisions": [], "action_items": [], "risks": [] }
+```
+
+Send the full corrected summary (the shape returned in `structured`). Each changed
+field is recorded as feedback used to calibrate the quality scores. **This does not
+change the stored summary** — `GET /result` still returns the original; corrections
+are collected as labels only. Available only when status is `done`.
 
 ### Health
 

@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import time
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 from typing import List
 
@@ -10,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from eden_summary.core import Job, JobStatus, update_job
 from eden_summary.email_service import send_email
-from eden_summary.metrics import job_stage_seconds, asr_processing_ratio, job_terminal_total
+from eden_summary.metrics import job_stage_seconds, asr_processing_ratio, job_terminal_total, quality_guard_seconds
+from eden_summary.quality import run_inline_guards
 from eden_summary.storage import upload_file, download_file
 from eden_summary.summarize import summarize_transcript, Summary
 from eden_summary.transcribe import transcribe, convert_to_wav, get_duration, Transcription
@@ -84,12 +87,36 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         job_terminal_total.labels(status='failed').inc()
         return
+    # Tier 1 inline quality guards: advisory, never fail the job.
+    quality_flags: dict | None = None
+    try:
+        quality_start = time.monotonic()
+        guard_result = await asyncio.to_thread(run_inline_guards, summary, '\n'.join(segments), detected_lang)
+        quality_guard_seconds.observe(time.monotonic() - quality_start)
+        quality_flags = guard_result.to_metadata()
+        if not guard_result.passed:
+            logger.info('Quality guards flagged %d item(s)', len(guard_result.flags), extra={"job_id": job_id})
+    except Exception:
+        logger.exception("Quality guards step failed; continuing", extra={"job_id": job_id})
+    artifacts = {**job.artifacts}
     with tempfile.NamedTemporaryFile(mode='w', encoding='UTF-8') as tmp:
         tmp.write(summary.to_text(detected_lang))
         tmp.flush()
         upload_file(tmp.name, f'{job_id}/summary.txt')
-    artifacts = {**job.artifacts, 'summary': f'{job_id}/summary.txt'}
-    await update_job(job_id, db_session, artifacts=artifacts)
+    artifacts['summary'] = f'{job_id}/summary.txt'
+    # Persist the raw transcript and structured summary so the async Tier-2
+    # faithfulness eval (a separate process, after this job ends) can reload them.
+    for name, payload in (
+        ('transcript', {'language': detected_lang, 'segments': segments}),
+        ('summary_json', asdict(summary)),
+    ):
+        with tempfile.NamedTemporaryFile(mode='w', encoding='UTF-8', suffix='.json') as tmp:
+            json.dump(payload, tmp, ensure_ascii=False)
+            tmp.flush()
+            key = f'{job_id}/{name}.json'
+            upload_file(tmp.name, key)
+            artifacts[name] = key
+    await update_job(job_id, db_session, artifacts=artifacts, quality_flags=quality_flags)
     try:
         logger.info('Email sending started', extra={"job_id": job_id})
         send_email(recipients=job.emails, subject=summary.title, body=summary.to_text(detected_lang))

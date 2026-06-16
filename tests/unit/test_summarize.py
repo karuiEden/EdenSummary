@@ -172,6 +172,27 @@ class TestExtractNumbers:
         assert _extract_numbers("no figures were mentioned here") == []
 
 
+class TestExtractNumbersRussian:
+    # русские форматы для inline-гарда (Q2 Tier 1) — additive к английским паттернам
+    def test_currency_euro(self):
+        assert _extract_numbers("цена будет 25 евро за штуку") == ["25 евро"]
+
+    def test_currency_rubles(self):
+        assert _extract_numbers("стоит 1000 рублей") == ["1000 рублей"]
+
+    def test_magnitude_with_currency(self):
+        assert _extract_numbers("прибыль около 15 миллионов евро") == ["15 миллионов евро"]
+
+    def test_magnitude_bare(self):
+        assert _extract_numbers("бюджет 50 миллионов") == ["50 миллионов"]
+
+    def test_percent_word(self):
+        assert _extract_numbers("маржа 34 процента и рост 20 процентов") == ["34 процента", "20 процентов"]
+
+    def test_no_numbers(self):
+        assert _extract_numbers("цифры не назывались на встрече") == []
+
+
 class TestExtractNumbersParked:
     # _extract_numbers оставлен как заготовка (см. docs/ml-experiments.md Q1a),
     # но НЕ должен попадать в промпты — проводка anchoring откачена.

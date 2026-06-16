@@ -18,10 +18,12 @@ _NUM = r'\d[\d,]*(?:\.\d+)?'
 _NUMBER_PATTERNS = [
     re.compile(rf'[€$£]\s?{_NUM}'),                                                # €25, $1,000.50
     re.compile(rf'{_NUM}\s*%'),                                                    # 50%
-    re.compile(rf'{_NUM}\s+percent', re.I),                                        # 20 percent
-    re.compile(rf'{_NUM}\s+(?:hundred|thousand|million|billion|trillion)'
-               rf'(?:\s+(?:euros?|dollars?|pounds?|cents?))?', re.I),             # 15 million euro
-    re.compile(rf'{_NUM}\s+(?:euros?|dollars?|pounds?|cents?|usd|eur|gbp)', re.I), # 25 euros, 12.50 euros
+    re.compile(rf'{_NUM}\s+(?:percent|процент\w*)', re.I),                         # 20 percent, 34 процента
+    re.compile(rf'{_NUM}\s+(?:hundred|thousand|million|billion|trillion'
+               rf'|тысяч\w*|миллион\w*|миллиард\w*|триллион\w*)'                   # 15 million, 50 миллионов
+               rf'(?:\s+(?:euros?|dollars?|pounds?|cents?|евро|рубл\w*|доллар\w*))?', re.I),
+    re.compile(rf'{_NUM}\s+(?:euros?|dollars?|pounds?|cents?|usd|eur|gbp'
+               rf'|евро|рубл\w*|доллар\w*)', re.I),                                # 25 euros, 25 евро
     re.compile(r'\b\d{1,2}:\d{2}\b'),                                              # 10:30
     re.compile(r'\b\d+\.\d+\b'),                                                   # 12.50
     re.compile(r'\b\d{1,3}(?:,\d{3})+\b'),                                         # 1,000
@@ -33,10 +35,11 @@ def _extract_numbers(text: str) -> list[str]:
     decimals) as their exact surface strings, de-duplicated and in order of
     appearance.
 
-    PARKED: not currently wired into the prompts. A first attempt at "numeric
-    anchoring" (injecting these with a hard "use ONLY these values" constraint)
-    measurably hurt faithfulness — see docs/ml-experiments.md (Q1a). Kept as the
-    building block for a future positively-framed variant."""
+    Not used for prompt-side "numeric anchoring": injecting these with a hard
+    "use ONLY these values" constraint measurably hurt faithfulness — see
+    docs/ml-experiments.md (Q1a). Now consumed read-only by the Tier 1 inline
+    quality guard (eden_summary/quality) to flag summary numbers that are not
+    grounded in the transcript."""
     spans = []
     for pattern in _NUMBER_PATTERNS:
         for match in pattern.finditer(text):

@@ -5,10 +5,22 @@ from typing import Annotated, List
 
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, Form
 from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from eden_summary.core import get_x_api_key, get_storage_cfg, get_db_cfg, JobStatus, get_session, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg, equal_api_key, check_file, check_and_parse_emails, check_id, create_job, get_status, get_result
+from eden_summary.core import get_x_api_key, get_storage_cfg, get_db_cfg, JobStatus, get_session, get_llm_cfg, get_whisper_cfg, get_smtp_cfg, get_celery_cfg, equal_api_key, check_file, check_and_parse_emails, check_id, create_job, get_status, get_result, record_result_edits
 from eden_summary.worker import process_job
+
+
+class ResultEdit(BaseModel):
+    """Corrected structured summary submitted via PATCH /result. Send the full
+    summary as returned by GET /result['structured']; unchanged fields are kept
+    so they can serve as negative calibration labels (Q3)."""
+    title: str = ''
+    tldr: list = []
+    decisions: list = []
+    action_items: list = []
+    risks: list = []
 
 
 logging.basicConfig(level=getattr(logging, os.getenv('LOG_LEVEL', "INFO").upper(), logging.INFO))
@@ -71,6 +83,18 @@ async def get_result_api(job_id: str, db_session: AsyncSession = Depends(get_ses
         raise HTTPException(status_code=400)
     resp = await get_result(job_id, db_session)
     if resp["status"] != "done":
+        raise HTTPException(status_code=409, detail=resp)
+    return resp
+
+@app.patch("/v1/jobs/{job_id}/result", dependencies=[Depends(check_api_key)])
+async def edit_result_api(job_id: str, edit: ResultEdit, db_session: AsyncSession = Depends(get_session)):
+    if not check_id(job_id):
+        raise HTTPException(status_code=400)
+    resp = await record_result_edits(job_id, edit.model_dump(), db_session)
+    if "error" in resp:
+        # not found → 404; not DONE or no structured summary → 409 (mirrors GET)
+        if resp.get("status") == JobStatus.NON_EXISTING:
+            raise HTTPException(status_code=404, detail=resp)
         raise HTTPException(status_code=409, detail=resp)
     return resp
 

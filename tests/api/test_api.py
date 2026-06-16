@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -157,3 +158,59 @@ class TestResult:
         body = r.json()
         assert body["status"] == "done"
         assert body["summary"] == summary_text
+        assert body["structured"] is None  # no summary_json artifact on this job
+
+
+# ---------- PATCH /v1/jobs/{id}/result ----------
+
+_STRUCTURED = {"title": "T", "tldr": ["a"], "decisions": ["d1"],
+               "action_items": ["x"], "risks": ["r1"]}
+
+
+async def _insert_done_job(db_session, job_id, artifacts):
+    async with db_session.begin():
+        db_session.add(Job(
+            id=job_id, status="done", emails=[],
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+            artifacts=artifacts, error=None, warning=None,
+        ))
+
+
+def _patch_download():
+    def _fake(s3_path, local_path):
+        with open(local_path, "w", encoding="UTF-8") as f:
+            json.dump(_STRUCTURED, f)
+    return patch("eden_summary.core.job_store.download_file", side_effect=_fake)
+
+
+class TestEditResult:
+    async def test_no_key_returns_401(self, client):
+        r = await client.patch(f"/v1/jobs/{uuid4()}/result", json=_STRUCTURED)
+        assert r.status_code == 401
+
+    async def test_invalid_uuid_returns_400(self, client, auth_headers):
+        r = await client.patch("/v1/jobs/not-a-uuid/result", headers=auth_headers, json=_STRUCTURED)
+        assert r.status_code == 400
+
+    async def test_unknown_job_returns_404(self, client, auth_headers):
+        r = await client.patch(f"/v1/jobs/{uuid4()}/result", headers=auth_headers, json=_STRUCTURED)
+        assert r.status_code == 404
+
+    async def test_not_done_job_returns_409(self, client, auth_headers):
+        job_id = await _create_job(client, auth_headers)  # status queued
+        r = await client.patch(f"/v1/jobs/{job_id}/result", headers=auth_headers, json=_STRUCTURED)
+        assert r.status_code == 409
+
+    async def test_edit_records_changed_field(self, client, auth_headers, db_session):
+        job_id = str(uuid4())
+        await _insert_done_job(db_session, job_id, {
+            "summary": f"{job_id}/summary.txt",
+            "summary_json": f"{job_id}/summary_json.json",
+        })
+        edited = {**_STRUCTURED, "risks": ["r1", "new risk"]}
+        with _patch_download():
+            r = await client.patch(f"/v1/jobs/{job_id}/result", headers=auth_headers, json=edited)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["recorded"] == 4
+        assert body["edited_fields"] == ["risks"]

@@ -1,4 +1,6 @@
 import asyncio
+import json
+import logging
 import shutil
 import tempfile
 from datetime import datetime, UTC
@@ -9,10 +11,19 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from eden_summary.storage import upload_file, download_file
-from .models import Job
+from .models import Job, JobFieldEdit
+
+logger = logging.getLogger(__name__)
+
+# Summary fields graded by the Tier-2 judge — mirrors faithfulness._FIELD_ORDER.
+# Kept local to avoid a core -> quality import cycle (quality imports from core).
+# Only these get edit rows: each must have a quality_eval.field_scores entry to
+# join at calibration time; the title is a label, not a judged claim.
+_EDIT_FIELDS = ('risks', 'decisions', 'action_items', 'tldr')
 
 
 class JobStatus(StrEnum):
@@ -79,7 +90,29 @@ async def get_result(job_id: str, db_session: AsyncSession):
                 summary = file.read()
         except Exception:
             return {"job_id": job_id, "status": JobStatus.FAILED, "error": "Internal server error"}
-    return {"job_id": job_id, "status": job.status, "summary": summary}
+    # Also surface the structured summary so a client can edit it field-by-field
+    # and submit corrections via PATCH /result (Q3). Best-effort: older jobs have
+    # no summary_json artifact, and a broken one must not break the text result.
+    structured = await _load_structured_summary(job.artifacts)
+    return {"job_id": job_id, "status": job.status, "summary": summary, "structured": structured}
+
+
+async def _load_structured_summary(artifacts: dict) -> dict | None:
+    """Download and parse the stored summary_json.json artifact (asdict(Summary)),
+    or None when it is absent/unreadable."""
+    key = artifacts.get('summary_json')
+    if not key:
+        return None
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = f'{tmp_dir}/summary.json'
+            await asyncio.to_thread(download_file, key, path)
+            with open(path, encoding='UTF-8') as file:
+                data = json.load(file)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        logger.warning("Could not load structured summary for editing", exc_info=True)
+        return None
 
 
 async def update_job(job_id: str, session: AsyncSession, **fields):
@@ -91,3 +124,74 @@ async def update_job(job_id: str, session: AsyncSession, **fields):
             raise ValueError("Job not found")
         for field, value in fields.items():
             setattr(job, field, value)
+
+
+def _canon(value: object) -> str:
+    """Canonical JSON for stable equality: dict key order doesn't matter, list
+    order does (a reorder counts as an edit — acceptable for a v1 edit signal),
+    and surface whitespace inside strings still matters."""
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+def _diff_fields(stored: dict, submitted: dict) -> list[dict]:
+    """Per-field structural diff over the judged summary fields. Returns one row
+    per field with `edited` = (submitted differs from stored). Pure — no IO — so
+    the calibration label logic is unit-testable without a DB or S3."""
+    rows: list[dict] = []
+    for field in _EDIT_FIELDS:
+        original = stored.get(field, [])
+        corrected = submitted.get(field, [])
+        rows.append({
+            'field': field,
+            'edited': _canon(original) != _canon(corrected),
+            'original': original,
+            'corrected': corrected,
+        })
+    return rows
+
+
+async def record_result_edits(job_id: str, submitted: dict, db_session: AsyncSession):
+    """Record a user's correction of a DONE job's summary as Q3 calibration
+    labels. A PATCH is one review event: every judged field is written (changed →
+    edited=True, untouched → genuine negative). Upserts on (job_id, field) so a
+    repeat PATCH overwrites — last edit wins, no double-counting. Does NOT touch
+    the stored summary_json (it is the immutable diff baseline the judge scored)."""
+    async with db_session.begin():
+        result = await db_session.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+        if job is None:
+            return {"job_id": job_id, "status": JobStatus.NON_EXISTING, "error": "Job not found"}
+        status = job.status
+        artifacts = dict(job.artifacts)
+    if status != JobStatus.DONE:
+        return {"job_id": job_id, "status": status, "error": "Result is not available for editing"}
+    if 'summary_json' not in artifacts:
+        return {"job_id": job_id, "status": status, "error": "Structured summary not available for editing"}
+
+    stored = await _load_structured_summary(artifacts)
+    if stored is None:
+        return {"job_id": job_id, "status": status, "error": "Structured summary not available for editing"}
+
+    rows = _diff_fields(stored, submitted)
+    now = datetime.now(UTC)
+    async with db_session.begin():
+        for row in rows:
+            stmt = pg_insert(JobFieldEdit).values(
+                job_id=job_id,
+                field=row['field'],
+                edited=row['edited'],
+                original=row['original'],
+                corrected=row['corrected'],
+                created_at=now,
+            ).on_conflict_do_update(
+                index_elements=['job_id', 'field'],
+                set_={
+                    'edited': row['edited'],
+                    'original': row['original'],
+                    'corrected': row['corrected'],
+                    'created_at': now,
+                },
+            )
+            await db_session.execute(stmt)
+    edited_fields = [row['field'] for row in rows if row['edited']]
+    return {"job_id": job_id, "status": status, "recorded": len(rows), "edited_fields": edited_fields}

@@ -38,9 +38,10 @@ def session_factory(test_engine):
 
 @pytest.fixture(autouse=True)
 async def clean_jobs(test_engine):
-    # чистим таблицу ПЕРЕД каждым тестом — изоляция
+    # чистим таблицу ПЕРЕД каждым тестом — изоляция.
+    # CASCADE: job_field_edits ссылается на jobs (FK), TRUNCATE без него упадёт.
     async with test_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE TABLE jobs"))
+        await conn.execute(text("TRUNCATE TABLE jobs CASCADE"))
     yield
 
 
