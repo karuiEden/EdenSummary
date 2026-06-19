@@ -17,6 +17,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      # Tests import modules that build settings at import time (e.g. the Celery
+      # app in worker.py needs REDIS_PASSWORD). Provide dummy config from the
+      # template — the same `cp .env.example .env` step the README documents.
+      - name: Create test env file
+        run: cp .env.example .env
+
       - name: Lint
         run: uv run ruff check eden_summary/
 
