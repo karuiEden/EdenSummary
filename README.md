@@ -64,6 +64,7 @@ All configuration is via environment variables (`.env` file).
 | `WHISPER_API_KEY` | ✅ | — | ASR server API key |
 | `WHISPER_MODEL` | | `large-v3` | Whisper model name |
 | `WHISPER_LANGUAGE` | | _(auto)_ | Force ASR language (BCP-47, e.g. `ru`). Leave empty for auto-detection |
+| `WHISPER_ASR_CHUNK_SECONDS` | | `300` | Audio longer than this (seconds) is split into pieces before transcription so each request stays under the ASR API's per-file cap. 16 kHz mono WAV ≈ 32 KB/s, so 300 s ≈ 9.6 MB — kept below Groq's 25 MB free-tier limit (uploads near the cap get connection-reset in practice). Raise it for a self-hosted ASR server with no size limit |
 | `MAX_CHARS` | | `4000` | Max characters per chunk sent to LLM |
 | **LLM** | | | |
 | `LLM_MODEL` | ✅ | — | litellm model string (e.g. `groq/llama-3.3-70b-versatile`, `openai/gpt-4o`) |

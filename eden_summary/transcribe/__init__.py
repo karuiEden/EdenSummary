@@ -1,2 +1,2 @@
-from .audio import convert_to_wav as convert_to_wav, get_duration as get_duration, is_audio as is_audio
+from .audio import convert_to_wav as convert_to_wav, get_duration as get_duration, is_audio as is_audio, split_audio as split_audio
 from .transcribe_audio import transcribe as transcribe, chunk_segments as chunk_segments, Transcription as Transcription

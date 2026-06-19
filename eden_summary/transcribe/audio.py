@@ -1,5 +1,6 @@
 import subprocess
 from pathlib import Path
+from typing import List
 
 _FFMPEG_TIMEOUT = 1800
 _FFPROBE_TIMEOUT = 30
@@ -28,3 +29,18 @@ def is_audio(path: str) -> bool:
         text=True
     )
     return res.stdout.strip() == 'audio' and res.returncode == 0
+
+def split_audio(input_path: Path, chunk_seconds: int, out_dir: Path) -> List[Path]:
+    """Split a (16 kHz mono WAV) file into <=chunk_seconds pieces so each fits under
+    the ASR API's per-file size cap. One ffmpeg pass via the segment muxer; we
+    re-encode to pcm_s16le (not -c copy) because some ffmpeg builds emit segment WAVs
+    with broken headers under stream-copy. Returns chunk paths in playback order."""
+    pattern = str(out_dir / "chunk_%03d.wav")
+    subprocess.run(
+        ["ffmpeg", "-i", str(input_path), "-f", "segment", "-segment_time", str(chunk_seconds),
+         "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", "-y", pattern],
+        capture_output=True,
+        timeout=_FFMPEG_TIMEOUT,
+        check=True
+    )
+    return sorted(out_dir.glob("chunk_*.wav"))

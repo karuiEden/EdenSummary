@@ -1,3 +1,4 @@
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
@@ -5,6 +6,7 @@ from typing import List
 import litellm
 
 from eden_summary.core import WhisperConfig, get_whisper_cfg
+from eden_summary.transcribe.audio import get_duration, split_audio
 
 litellm.drop_params = True
 _ASR_PROTOCOL = "openai"
@@ -26,7 +28,8 @@ def _to_bcp47(provider_lang: str | None) -> str | None:
         return None
     return _BCP47_MAP.get(provider_lang.lower())
 
-def transcribe(audio_path: Path, language: str | None) -> Transcription:
+def _transcribe_file(audio_path: Path, language: str | None) -> Transcription:
+    """One ASR request for a file that already fits the provider's size cap."""
     config: WhisperConfig = get_whisper_cfg()
     with open(audio_path, 'rb') as f:
         response = litellm.transcription(
@@ -45,6 +48,29 @@ def transcribe(audio_path: Path, language: str | None) -> Transcription:
         segments=segments,
         language=_to_bcp47(getattr(response, 'language', None))
     )
+
+
+def transcribe(audio_path: Path, language: str | None) -> Transcription:
+    """Transcribe audio, splitting long inputs so each ASR request stays under the
+    provider's per-file size cap (OpenAI/Groq ~25 MB). Short files take a single
+    request — behaviour unchanged. Longer ones are cut into asr_chunk_seconds pieces,
+    transcribed sequentially (Groq TPM), and the segment texts concatenated in order.
+    Timestamps are not offset: Transcription carries text only. Boundary cuts can
+    clip a word at a seam — a known limitation; VAD/silence-aware split is the future
+    upgrade."""
+    config: WhisperConfig = get_whisper_cfg()
+    if get_duration(audio_path) <= config.asr_chunk_seconds:
+        return _transcribe_file(audio_path, language)
+
+    segments: List[str] = []
+    detected: str | None = None
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for chunk in split_audio(audio_path, config.asr_chunk_seconds, Path(tmp_dir)):
+            part = _transcribe_file(chunk, language)
+            segments.extend(part.segments)
+            if detected is None:
+                detected = part.language
+    return Transcription(segments=segments, language=detected)
 
 
 
