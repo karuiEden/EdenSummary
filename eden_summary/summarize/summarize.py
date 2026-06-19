@@ -36,8 +36,8 @@ def _extract_numbers(text: str) -> list[str]:
     appearance.
 
     Not used for prompt-side "numeric anchoring": injecting these with a hard
-    "use ONLY these values" constraint measurably hurt faithfulness — see
-    docs/ml-experiments.md (Q1a). Now consumed read-only by the Tier 1 inline
+    "use ONLY these values" constraint measurably hurt faithfulness. Now
+    consumed read-only by the Tier 1 inline
     quality guard (eden_summary/quality) to flag summary numbers that are not
     grounded in the transcript."""
     spans = []
@@ -293,7 +293,7 @@ def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
 def _summarize_single_pass(transcript: str, _attempt: int = 0) -> Summary:
     """Summarize the whole transcript in one LLM call (no map-reduce). Used when
     the transcript fits the model context — avoids the information loss that the
-    map→reduce boundary introduces (see docs/ml-experiments.md, Q1a)."""
+    map→reduce boundary introduces."""
     config: LLMConfig = get_llm_cfg()
     content = _complete([
         {'role': 'system', 'content': SYSTEM_PROMPT},

@@ -194,7 +194,7 @@ class TestExtractNumbersRussian:
 
 
 class TestExtractNumbersParked:
-    # _extract_numbers оставлен как заготовка (см. docs/ml-experiments.md Q1a),
+    # _extract_numbers оставлен как заготовка,
     # но НЕ должен попадать в промпты — проводка anchoring откачена.
     @patch("eden_summary.summarize.summarize.get_llm_cfg")
     @patch("eden_summary.summarize.summarize.completion")

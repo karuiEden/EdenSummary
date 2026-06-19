@@ -47,7 +47,7 @@ class LLMConfig(BaseSettings):
     # claim judge (questions from the summary, answered blind from the transcript,
     # compared deterministically). Reuses the judge model/credentials/token-limit.
     # v1 is compute-and-log: below_threshold is recorded but no regeneration is
-    # applied yet (see docs/ml-experiments.md, Q4).
+    # applied yet.
     summq_enabled: bool = Field(default=True, validation_alias='LLM_SUMMQ_ENABLED')
     summq_consistency_threshold: float = Field(default=0.7, validation_alias='LLM_SUMMQ_THRESHOLD')
     summq_max_questions: int = Field(default=8, validation_alias='LLM_SUMMQ_MAX_QUESTIONS')

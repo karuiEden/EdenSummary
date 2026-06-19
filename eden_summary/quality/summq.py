@@ -13,7 +13,7 @@ QuestEval recipe).
 v1 is compute-and-log only: the consistency score and a below_threshold flag are
 stored on the job, but no regeneration is applied. The regeneration loop is
 deferred — at temperature 0 a naive re-summarization is a near no-op, so it needs
-a repair prompt plus real data before it can be validated (see docs/ml-experiments.md).
+a repair prompt plus real data before it can be validated.
 """
 import logging
 import re

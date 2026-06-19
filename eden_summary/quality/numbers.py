@@ -5,7 +5,7 @@ import re
 # ("twenty five euros", "двадцать пять евро") while LLM summaries emit digits
 # ("25 euros", "25 евро"). The inline number guard grounds summary digits
 # against the transcript, so we rewrite spoken numbers to digits first —
-# otherwise every number reads as ungrounded (see docs/ml-experiments.md, Q2).
+# otherwise every number reads as ungrounded.
 #
 # Deliberately narrow, not a full ITN. Scale words (hundred/thousand/million,
 # тысяча/миллион/миллиард) are left as text, which is exactly what _digit_core
@@ -19,8 +19,7 @@ import re
 # bounded by coverage. (Over-conversion, conversely, only adds spurious digits and
 # can at most miss a flag — a false negative.) Known gaps that can produce FP:
 # English 'a hundred'/year forms ('nineteen eighty four'); Russian numeral
-# declension ('двадцати пяти') and the decimal comma ('12,50'). See
-# docs/ml-experiments.md (Q2) for the full list and what is/isn't validated.
+# declension ('двадцати пяти') and the decimal comma ('12,50').
 
 # ---- English ----------------------------------------------------------------
 

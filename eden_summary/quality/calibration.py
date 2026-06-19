@@ -13,7 +13,7 @@ monotone) and only switch to isotonic (PAV) once there is enough data. Degenerat
 inputs (no labels, a single class) fall back to a base rate.
 
 v1 is compute-and-log only: there is NO live apply-path. Until real user edits
-exist, every fit here is on synthetic data — see docs/ml-experiments.md.
+exist, every fit here is on synthetic data.
 """
 import logging
 import math

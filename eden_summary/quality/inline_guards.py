@@ -86,8 +86,8 @@ def _check_numbers(summary_text: str, transcript: str) -> list[QualityFlag]:
     The transcript is first run through spoken_to_digits (lightweight ITN):
     speech transcripts spell numbers out ('twenty five euros') while summaries
     emit digits ('25 euros'), and without this every number would read as
-    ungrounded — ~100% false positives on speech (see docs/ml-experiments.md,
-    Q2 Tier 1). Coverage gaps in that converter (e.g. Russian declension) leave
+    ungrounded — ~100% false positives on speech. Coverage gaps in that
+    converter (e.g. Russian declension) leave
     their numbers unconverted and so remain residual false-positive sources, not
     false negatives — precision here is bounded by ITN coverage, not guaranteed."""
     transcript_no_commas = _normalize_commas(spoken_to_digits(transcript))
