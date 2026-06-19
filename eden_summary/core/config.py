@@ -14,6 +14,11 @@ class WhisperConfig(BaseSettings):
     api_base: str = Field(validation_alias='WHISPER_API_BASE')
     chunk_max_chars: int = Field(default=8000, validation_alias='MAX_CHARS')
     chunk_overlap_chars: int = Field(default=1200, validation_alias='CHUNK_OVERLAP_CHARS')
+    # Audio longer than this is split into <=N-second pieces before transcription so
+    # each request stays under the ASR API's per-file cap (OpenAI/Groq ~25 MB). The
+    # pipeline always feeds 16 kHz mono WAV (~32 KB/s), so 600 s ≈ 19 MB < 25 MB.
+    # Self-hosted whisper-server has no cap → raise this to disable chunking.
+    asr_chunk_seconds: int = Field(default=600, validation_alias='WHISPER_ASR_CHUNK_SECONDS')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 
@@ -37,6 +42,14 @@ class LLMConfig(BaseSettings):
     judge_api_base: str | None = Field(default=None, validation_alias='LLM_JUDGE_API_BASE')
     judge_api_key: str | None = Field(default=None, validation_alias='LLM_JUDGE_API_KEY')
     judge_token_limit: int = Field(default=32000, validation_alias='LLM_JUDGE_TOKEN_LIMIT')
+    # Q4 SummQ: QA-based consistency check, an independent signal to the Tier-2
+    # claim judge (questions from the summary, answered blind from the transcript,
+    # compared deterministically). Reuses the judge model/credentials/token-limit.
+    # v1 is compute-and-log: below_threshold is recorded but no regeneration is
+    # applied yet (see docs/ml-experiments.md, Q4).
+    summq_enabled: bool = Field(default=True, validation_alias='LLM_SUMMQ_ENABLED')
+    summq_consistency_threshold: float = Field(default=0.7, validation_alias='LLM_SUMMQ_THRESHOLD')
+    summq_max_questions: int = Field(default=8, validation_alias='LLM_SUMMQ_MAX_QUESTIONS')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
     @property

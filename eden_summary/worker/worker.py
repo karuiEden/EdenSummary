@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from eden_summary import pipeline
 from eden_summary.core import get_celery_cfg, get_llm_cfg, AsyncLocalSession, Job, JobFieldEdit, JobStatus, update_job
-from eden_summary.quality import fit_calibration, judge_faithfulness
+from eden_summary.quality import fit_calibration, judge_faithfulness, verify_summq_consistency
 from eden_summary.storage import download_file
 from eden_summary.summarize import Summary
 
@@ -45,11 +45,15 @@ def process_job(job_id: str, language: str | None = None):
         async with AsyncLocalSession() as db_session:
             await pipeline.process_job(job_id, language, db_session)
     asyncio.run(_run())
-    # Tier-2 faithfulness eval is dispatched as a separate, post-terminal task so
-    # it stays out of the summarization hot path. The task self-guards on job
-    # status, so enqueueing on a non-DONE job is a harmless no-op.
-    if get_llm_cfg().judge_enabled:
+    # Post-terminal quality evals are dispatched as separate tasks so they stay out
+    # of the summarization hot path. Each self-guards on job status (non-DONE → no-op)
+    # and is independent: SummQ failing must not affect the Tier-2 eval or vice versa.
+    # Both judge the full transcript, so enabling both doubles post-terminal LLM load.
+    llm_cfg = get_llm_cfg()
+    if llm_cfg.judge_enabled:
         evaluate_summary.delay(job_id)
+    if llm_cfg.summq_enabled:
+        verify_summq.delay(job_id)
 
 
 @celery_app.task
@@ -88,6 +92,46 @@ async def _evaluate(job_id: str) -> None:
         await update_job(job_id, db, quality_eval=result.to_metadata())
         logger.info("Tier-2 eval done for job %s (evaluated=%s, score=%s)",
                     job_id, result.evaluated, result.overall_score)
+
+
+@celery_app.task
+def verify_summq(job_id: str):
+    """Q4 SummQ QA-consistency check. Post-terminal, advisory, never-fail — mirrors
+    evaluate_summary and is independent of it. Quizzes the summary, answers blind
+    from the transcript, compares deterministically. Compute-and-log only: stores
+    the consistency score in jobs.summq_eval; no live regeneration yet."""
+    try:
+        asyncio.run(_verify_summq(job_id))
+    except Exception:
+        logger.exception("Q4 SummQ failed for job %s; leaving job untouched", job_id)
+
+
+async def _verify_summq(job_id: str) -> None:
+    async with AsyncLocalSession() as db:
+        async with db.begin():
+            job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
+            if job is None or job.status != JobStatus.DONE:
+                logger.info("Q4 SummQ skipped for job %s (not DONE)", job_id)
+                return
+            artifacts = dict(job.artifacts)
+        if 'transcript' not in artifacts or 'summary_json' not in artifacts:
+            logger.info("Q4 SummQ skipped for job %s (missing artifacts)", job_id)
+            return
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            t_path = f'{tmp_dir}/transcript.json'
+            s_path = f'{tmp_dir}/summary.json'
+            await asyncio.to_thread(download_file, artifacts['transcript'], t_path)
+            await asyncio.to_thread(download_file, artifacts['summary_json'], s_path)
+            with open(t_path, encoding='UTF-8') as f:
+                transcript_data = json.load(f)
+            with open(s_path, encoding='UTF-8') as f:
+                summary = Summary(**json.load(f))
+        transcript = '\n'.join(transcript_data.get('segments', []))
+        result = await asyncio.to_thread(verify_summq_consistency, summary, transcript)
+        meta = result.to_metadata()
+        await update_job(job_id, db, summq_eval=meta)
+        logger.info("Q4 SummQ done for job %s (evaluated=%s, consistency=%s, below_threshold=%s)",
+                    job_id, result.evaluated, result.consistency_score, meta['below_threshold'])
 
 
 @celery_app.task

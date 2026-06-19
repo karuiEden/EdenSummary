@@ -26,6 +26,7 @@ class Job(Base):
     warning: Mapped[str | None] = mapped_column(String)
     quality_flags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     quality_eval: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    summq_eval: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class JobFieldEdit(Base):
