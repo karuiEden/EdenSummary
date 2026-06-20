@@ -94,7 +94,19 @@ async def get_result(job_id: str, db_session: AsyncSession):
     # and submit corrections via PATCH /result (Q3). Best-effort: older jobs have
     # no summary_json artifact, and a broken one must not break the text result.
     structured = await _load_structured_summary(job.artifacts)
-    return {"job_id": job_id, "status": job.status, "summary": summary, "structured": structured}
+    return {
+        "job_id": job_id,
+        "status": job.status,
+        "summary": summary,
+        "structured": structured,
+        # Quality signals (advisory). quality_flags (Tier-1 inline) is present as
+        # soon as the job is done. quality_eval (Tier-2 faithfulness) and summq_eval
+        # (SummQ consistency) are produced by post-terminal async tasks, so they read
+        # null on the first fetch(es) and populate seconds-to-minutes later — re-poll.
+        "quality_flags": job.quality_flags,
+        "quality_eval": job.quality_eval,
+        "summq_eval": job.summq_eval,
+    }
 
 
 async def _load_structured_summary(artifacts: dict) -> dict | None:
