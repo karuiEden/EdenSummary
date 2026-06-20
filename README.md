@@ -87,6 +87,10 @@ All configuration is via environment variables (`.env` file).
 | `LLM_SUMMQ_ENABLED` | | `true` | Enable Q4 SummQ QA-consistency check (post-terminal) |
 | `LLM_SUMMQ_THRESHOLD` | | `0.7` | Consistency score below this marks the summary `below_threshold` |
 | `LLM_SUMMQ_MAX_QUESTIONS` | | `8` | Max fact-check questions generated per summary |
+| **Regeneration (opt-in)** | | | |
+| `LLM_SUMMQ_REGEN` | | `false` | Enable keep-if-better regeneration: a summary that fails the consistency checks is repaired in-pipeline (before the email) and the repaired version kept only if no metric regressed. Off by default — see [Regeneration](#regeneration-opt-in--off-by-default) |
+| `LLM_SUMMQ_REGEN_TRIGGER` | | `both` | Trigger policy: `summq` (SummQ below threshold) or `both` (SummQ **and** Tier-2 faithfulness below threshold — two independent judges must agree) |
+| `LLM_JUDGE_FAITHFULNESS_THRESHOLD` | | `0.8` | Tier-2 score below this counts as a faithfulness flag for the `both` trigger |
 | **SMTP** | | | |
 | `SMTP_HOST` | ✅ | — | SMTP server host |
 | `SMTP_PORT` | | `587` | SMTP port |
@@ -220,13 +224,16 @@ a reviewer changed as labels (changed → positive, untouched → genuine negati
 calibrate the judge scores over time. The stored summary is never modified — see
 [Submit corrections](#submit-corrections).
 
-### Regeneration (planned, opt-in — off by default)
+### Regeneration (opt-in — off by default)
 
-When a summary fails the consistency checks, EdenSummary can repair the unsupported
-claims (using the summarizer model) and adopt the repaired version **only if it scores
-no worse** on the same metrics (*keep-if-better*), all in-pipeline before the email is
-sent. The trigger is conservative — by default it requires **both** the faithfulness
-judge and SummQ to flag the summary.
+Enable with `LLM_SUMMQ_REGEN=true`. When a summary fails the consistency checks,
+EdenSummary repairs the unsupported claims (using the summarizer model) and adopts the
+repaired version **only if it scores no worse** on the same metrics (*keep-if-better*),
+all in-pipeline before the email is sent. The trigger is set by `LLM_SUMMQ_REGEN_TRIGGER`
+and is conservative by default (`both`): it requires **both** the faithfulness judge and
+SummQ to flag the summary. The metrics computed during regeneration are persisted
+directly, so the matching post-terminal eval is skipped for that job (single source of
+truth).
 
 > **Honest boundary.** keep-if-better guarantees *not worse on the faithfulness
 > metrics*, **not** *not worse in overall quality*: SummQ builds its questions from the

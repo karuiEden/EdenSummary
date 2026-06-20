@@ -10,10 +10,10 @@ from typing import List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from eden_summary.core import Job, JobStatus, update_job
+from eden_summary.core import Job, JobStatus, get_llm_cfg, update_job
 from eden_summary.email_service import send_email
 from eden_summary.metrics import job_stage_seconds, asr_processing_ratio, job_terminal_total, quality_guard_seconds
-from eden_summary.quality import run_inline_guards
+from eden_summary.quality import repair_if_inconsistent, run_inline_guards
 from eden_summary.storage import upload_file, download_file
 from eden_summary.summarize import summarize_transcript, Summary
 from eden_summary.transcribe import transcribe, convert_to_wav, get_duration, Transcription
@@ -87,6 +87,18 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         job_terminal_total.labels(status='failed').inc()
         return
+    # §6.6 Regeneration (keep-if-better) — opt-in, BEFORE persist/email so the served
+    # result is the chosen version. Never-fail: any error keeps the original summary.
+    # When it runs, the metrics it computed are persisted below (single source of
+    # truth) and the worker skips the matching post-terminal eval for this job.
+    regen_eval: dict = {}
+    if get_llm_cfg().summq_regen_enabled:
+        try:
+            summary, regen_eval = await asyncio.to_thread(
+                repair_if_inconsistent, summary, '\n'.join(segments))
+        except Exception:
+            logger.exception("Regeneration step failed; keeping original summary", extra={"job_id": job_id})
+            regen_eval = {}
     # Tier 1 inline quality guards: advisory, never fail the job.
     quality_flags: dict | None = None
     try:
@@ -116,7 +128,7 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
             key = f'{job_id}/{name}.json'
             upload_file(tmp.name, key)
             artifacts[name] = key
-    await update_job(job_id, db_session, artifacts=artifacts, quality_flags=quality_flags)
+    await update_job(job_id, db_session, artifacts=artifacts, quality_flags=quality_flags, **regen_eval)
     try:
         logger.info('Email sending started', extra={"job_id": job_id})
         send_email(recipients=job.emails, subject=summary.title, body=summary.to_text(detected_lang))

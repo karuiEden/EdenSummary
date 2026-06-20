@@ -17,3 +17,6 @@ from .summq import (
     SummQResult as SummQResult,
     verify_summq_consistency as verify_summq_consistency,
 )
+from .regen import (
+    repair_if_inconsistent as repair_if_inconsistent,
+)

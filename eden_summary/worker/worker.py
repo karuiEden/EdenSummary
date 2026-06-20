@@ -49,10 +49,19 @@ def process_job(job_id: str, language: str | None = None):
     # of the summarization hot path. Each self-guards on job status (non-DONE → no-op)
     # and is independent: SummQ failing must not affect the Tier-2 eval or vice versa.
     # Both judge the full transcript, so enabling both doubles post-terminal LLM load.
+    #
+    # §6.6 single source of truth: when regeneration is on, the relevant metrics were
+    # already computed in-pipeline on the FINAL summary and persisted there. Skip the
+    # matching post-terminal task for this job — a non-deterministic re-evaluation
+    # would otherwise overwrite the persisted score. Matrix: regen off → dispatch both;
+    # 'summq' → SummQ in-pipeline (skip verify_summq), judge post-terminal; 'both' →
+    # both in-pipeline (skip both).
     llm_cfg = get_llm_cfg()
-    if llm_cfg.judge_enabled:
+    summq_in_pipeline = llm_cfg.summq_regen_enabled
+    judge_in_pipeline = llm_cfg.summq_regen_enabled and llm_cfg.summq_regen_trigger == 'both'
+    if llm_cfg.judge_enabled and not judge_in_pipeline:
         evaluate_summary.delay(job_id)
-    if llm_cfg.summq_enabled:
+    if llm_cfg.summq_enabled and not summq_in_pipeline:
         verify_summq.delay(job_id)
 
 

@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import List
 
 from litellm import completion
@@ -322,3 +322,49 @@ def summarize_transcript(segments: List[str]) -> Summary:
         return _summarize_single_pass(full_text)
     logger.info("Transcript ~%d tokens exceeds single-pass limit; using map-reduce", estimated)
     return build_summary(chunk_segments(segments))
+
+
+REPAIR_SYSTEM_PROMPT: str = """You are a meeting-summary editor. You are given a meeting
+transcript, a draft structured summary, and a list of items in the summary that a
+checker flagged as NOT supported by the transcript. Produce a corrected summary.
+
+Rules:
+- Correct each flagged claim so it matches what the transcript actually says.
+- Remove a claim ONLY if the transcript genuinely does not support it.
+- Do NOT drop or weaken claims that ARE supported by the transcript — keep all correct
+  content (removing supported items to silence the checker is not allowed).
+- Extract only information explicitly in the transcript; an empty list is better than a
+  fabricated item.
+- Return ONLY valid JSON, no markdown, no explanations.
+"""
+
+REPAIR_USER_PROMPT: str = """Transcript:
+{transcript}
+
+Draft summary (JSON):
+{summary}
+
+Items flagged as not supported by the transcript:
+{issues}
+
+Return the corrected summary as JSON with exactly these fields:
+- title, tldr, decisions, action_items, risks
+Fix or remove only the flagged items; keep everything the transcript supports.
+"""
+
+
+def repair_summary(transcript: str, summary: Summary, issues: List[str]) -> Summary:
+    """§6.6 keep-if-better: rewrite a summary's flagged-unsupported claims against the
+    transcript, using the SUMMARIZER model (not the judge). Reuses the shared
+    completion / parse / build helpers. The prompt corrects or removes only the flagged
+    items and is instructed to preserve all transcript-supported content."""
+    issues_text = '\n'.join(f'- {issue}' for issue in issues) if issues else '(none provided)'
+    content = _complete([
+        {'role': 'system', 'content': REPAIR_SYSTEM_PROMPT},
+        {'role': 'user', 'content': REPAIR_USER_PROMPT.format(
+            transcript=transcript,
+            summary=json.dumps(asdict(summary), ensure_ascii=False),
+            issues=issues_text,
+        )},
+    ])
+    return _dict_to_summary(_parse_json(content))

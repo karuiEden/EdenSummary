@@ -65,6 +65,11 @@ def mocks():
                 title="Title", tldr=["t"], decisions=[], action_items=[], risks=[])),
             send_email=p("send_email"),
             update_job=p("update_job", new=AsyncMock(side_effect=_fake_update)),
+            # §6.6 regen is read in-pipeline; default it OFF so existing tests stay
+            # hermetic (no dependency on .env completeness) and behaviour is unchanged.
+            get_llm_cfg=p("get_llm_cfg", return_value=SimpleNamespace(summq_regen_enabled=False)),
+            repair_if_inconsistent=p("repair_if_inconsistent", return_value=(Summary(
+                title="Title", tldr=["t"], decisions=[], action_items=[], risks=[]), {})),
         )
 
 
@@ -141,6 +146,21 @@ async def test_summarization_failure_stops_before_email(mocks):
         JobStatus.ASR_RUNNING, JobStatus.SUMMARY_RUNNING, JobStatus.FAILED]
     assert _error_for(mocks.update_job, JobStatus.FAILED) == "LLM summarization failed"
     mocks.send_email.assert_not_called()
+
+
+async def test_regeneration_runs_when_enabled(mocks):
+    # §6.6: with regen on, repair_if_inconsistent runs before the email, the chosen
+    # summary is the one served, and its in-pipeline metrics are persisted.
+    repaired = Summary(title="Repaired", tldr=["r"], decisions=["d2"], action_items=[], risks=[])
+    mocks.get_llm_cfg.return_value = SimpleNamespace(summq_regen_enabled=True)
+    mocks.repair_if_inconsistent.return_value = (repaired, {"summq_eval": {"consistency_score": 0.9}})
+
+    await process_job("job-1", "en-US", mocks.db)
+
+    mocks.repair_if_inconsistent.assert_called_once()
+    assert mocks.send_email.call_args.kwargs["subject"] == "Repaired"  # served = repaired
+    artifact_calls = [c for c in mocks.update_job.await_args_list if "artifacts" in c.kwargs]
+    assert artifact_calls[-1].kwargs.get("summq_eval") == {"consistency_score": 0.9}
 
 
 async def test_smtp_failure_keeps_result_available(mocks):

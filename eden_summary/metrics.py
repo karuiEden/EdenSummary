@@ -24,3 +24,12 @@ job_terminal_total = Counter(
     'Jobs by terminal status',
     ['status'],
 )
+
+# §6.6 Regeneration outcome: 'applied' (repaired kept), 'reverted' (repaired worse,
+# original kept), 'skipped' (trigger did not fire). Lets us observe how often regen
+# fires and how often keep-if-better actually keeps the repaired version.
+summq_regen_total = Counter(
+    'eden_summq_regen_total',
+    'SummQ regeneration outcomes',
+    ['outcome'],
+)

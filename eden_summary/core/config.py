@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import Field, model_validator
@@ -51,6 +52,16 @@ class LLMConfig(BaseSettings):
     summq_enabled: bool = Field(default=True, validation_alias='LLM_SUMMQ_ENABLED')
     summq_consistency_threshold: float = Field(default=0.7, validation_alias='LLM_SUMMQ_THRESHOLD')
     summq_max_questions: int = Field(default=8, validation_alias='LLM_SUMMQ_MAX_QUESTIONS')
+    # §6.6 Regeneration (keep-if-better) — opt-in, off by default. When enabled, a
+    # summary that fails the consistency checks is repaired in-pipeline (before the
+    # email) and the repaired version is kept only if it scores no worse. Trigger
+    # policy: 'summq' = SummQ below_threshold; 'both' = SummQ below_threshold AND
+    # Tier-2 faithfulness < judge_faithfulness_threshold (two independent judges agree).
+    summq_regen_enabled: bool = Field(default=False, validation_alias='LLM_SUMMQ_REGEN')
+    summq_regen_trigger: Literal['summq', 'both'] = Field(
+        default='both', validation_alias='LLM_SUMMQ_REGEN_TRIGGER')
+    judge_faithfulness_threshold: float = Field(
+        default=0.8, validation_alias='LLM_JUDGE_FAITHFULNESS_THRESHOLD')
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
     @property
