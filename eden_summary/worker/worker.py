@@ -45,23 +45,29 @@ def process_job(job_id: str, language: str | None = None):
         async with AsyncLocalSession() as db_session:
             await pipeline.process_job(job_id, language, db_session)
     asyncio.run(_run())
-    # Post-terminal quality evals are dispatched as separate tasks so they stay out
-    # of the summarization hot path. Each self-guards on job status (non-DONE → no-op)
-    # and is independent: SummQ failing must not affect the Tier-2 eval or vice versa.
-    # Both judge the full transcript, so enabling both doubles post-terminal LLM load.
-    #
-    # §6.6 single source of truth: when regeneration is on, the relevant metrics were
-    # already computed in-pipeline on the FINAL summary and persisted there. Skip the
-    # matching post-terminal task for this job — a non-deterministic re-evaluation
-    # would otherwise overwrite the persisted score. Matrix: regen off → dispatch both;
-    # 'summq' → SummQ in-pipeline (skip verify_summq), judge post-terminal; 'both' →
-    # both in-pipeline (skip both).
+    asyncio.run(_dispatch_post_terminal(job_id))
+
+
+async def _dispatch_post_terminal(job_id: str) -> None:
+    """Dispatch the post-terminal quality evals — each as a separate task so they
+    stay out of the summarization hot path; each self-guards on status==DONE and is
+    independent.
+
+    §6.6 single source of truth: regeneration computes and persists its metric
+    in-pipeline, so re-running it post-terminal would overwrite the stored score with
+    a non-deterministic re-eval. We therefore dispatch only the eval that is NOT
+    already persisted. Keying off the persisted state (not the regen config flag) also
+    self-heals the case where regen is enabled but its in-pipeline computation failed
+    (e.g. a rate limit) and wrote nothing — that eval must still run."""
     llm_cfg = get_llm_cfg()
-    summq_in_pipeline = llm_cfg.summq_regen_enabled
-    judge_in_pipeline = llm_cfg.summq_regen_enabled and llm_cfg.summq_regen_trigger == 'both'
-    if llm_cfg.judge_enabled and not judge_in_pipeline:
+    async with AsyncLocalSession() as db:
+        async with db.begin():
+            job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
+            quality_eval = job.quality_eval if job else None
+            summq_eval = job.summq_eval if job else None
+    if llm_cfg.judge_enabled and quality_eval is None:
         evaluate_summary.delay(job_id)
-    if llm_cfg.summq_enabled and not summq_in_pipeline:
+    if llm_cfg.summq_enabled and summq_eval is None:
         verify_summq.delay(job_id)
 
 

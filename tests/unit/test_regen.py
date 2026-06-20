@@ -128,20 +128,39 @@ class TestIssuesBrief:
         assert any("Price?" in i for i in issues)
 
 
-# ----------------------------------------------- worker post-terminal skip matrix
-class _SessionCM:
+# ------------------------------------------ worker post-terminal dispatch (state-based)
+class _BeginCM:
     async def __aenter__(self):
-        return MagicMock()
+        return None
 
     async def __aexit__(self, *exc):
         return False
 
 
-def _dispatch(regen_enabled, trigger="both"):
-    cfg = SimpleNamespace(judge_enabled=True, summq_enabled=True,
-                          summq_regen_enabled=regen_enabled, summq_regen_trigger=trigger)
+class _SessionCM:
+    def __init__(self, db):
+        self._db = db
+
+    async def __aenter__(self):
+        return self._db
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _dispatch(quality_eval, summq_eval, judge_enabled=True, summq_enabled=True):
+    """Worker dispatches a post-terminal eval iff it is enabled AND not already
+    persisted (the regen path stores it in-pipeline). State-based, so it self-heals
+    when regen ran but wrote nothing (e.g. a rate limit)."""
+    cfg = SimpleNamespace(judge_enabled=judge_enabled, summq_enabled=summq_enabled)
+    job = SimpleNamespace(id="job-1", quality_eval=quality_eval, summq_eval=summq_eval)
+    db = MagicMock()
+    db.begin = MagicMock(return_value=_BeginCM())
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=job)
+    db.execute = AsyncMock(return_value=result)
     with patch.object(worker.pipeline, "process_job", new=AsyncMock()), \
-         patch.object(worker, "AsyncLocalSession", return_value=_SessionCM()), \
+         patch.object(worker, "AsyncLocalSession", return_value=_SessionCM(db)), \
          patch.object(worker, "get_llm_cfg", return_value=cfg), \
          patch.object(worker, "evaluate_summary") as ev, \
          patch.object(worker, "verify_summq") as sq:
@@ -149,18 +168,28 @@ def _dispatch(regen_enabled, trigger="both"):
     return ev, sq
 
 
-class TestWorkerDispatchMatrix:
-    def test_regen_off_dispatches_both(self):
-        ev, sq = _dispatch(False)
+class TestWorkerDispatchesMissingEvals:
+    def test_dispatches_both_when_none_persisted(self):
+        # regen off — or regen enabled but its in-pipeline computation wrote nothing
+        ev, sq = _dispatch(quality_eval=None, summq_eval=None)
         ev.delay.assert_called_once_with("job-1")
         sq.delay.assert_called_once_with("job-1")
 
-    def test_regen_summq_skips_summq_only(self):
-        ev, sq = _dispatch(True, "summq")
+    def test_skips_summq_when_already_persisted(self):
+        # regen 'summq': SummQ persisted in-pipeline, judge still pending
+        ev, sq = _dispatch(quality_eval=None, summq_eval={"consistency_score": 0.9})
         ev.delay.assert_called_once_with("job-1")
         sq.delay.assert_not_called()
 
-    def test_regen_both_skips_both(self):
-        ev, sq = _dispatch(True, "both")
+    def test_skips_both_when_both_persisted(self):
+        # regen 'both': both metrics persisted in-pipeline
+        ev, sq = _dispatch(quality_eval={"overall_score": 1.0},
+                           summq_eval={"consistency_score": 0.9})
+        ev.delay.assert_not_called()
+        sq.delay.assert_not_called()
+
+    def test_respects_enabled_flags(self):
+        ev, sq = _dispatch(quality_eval=None, summq_eval=None,
+                           judge_enabled=False, summq_enabled=False)
         ev.delay.assert_not_called()
         sq.delay.assert_not_called()
