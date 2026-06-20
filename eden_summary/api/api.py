@@ -56,11 +56,13 @@ def health():
 
 @app.post("/v1/jobs", dependencies=[Depends(check_api_key)], status_code=202)
 async def create_job_api(file: UploadFile, emails: Annotated[str | None, Form()] = None, language: Annotated[str | None, Form()] = None, db_session: AsyncSession = Depends(get_session)):
-    if not await check_file(file):
-        raise HTTPException(status_code=415)
+    # Size check first: reject an oversized upload before check_file copies the whole
+    # file to a temp for content sniffing.
     max_bytes = int(os.getenv('MAX_UPLOAD_MB', "500")) * 1024 * 1024
     if file.size and file.size > max_bytes:
         raise HTTPException(status_code=413)
+    if not await check_file(file):
+        raise HTTPException(status_code=415)
     emails_list: List[str] = check_and_parse_emails(emails)
     resp = await create_job(file, emails_list, db_session)
     if resp["status"] == JobStatus.FAILED:
@@ -82,6 +84,8 @@ async def get_result_api(job_id: str, db_session: AsyncSession = Depends(get_ses
     if not check_id(job_id):
         raise HTTPException(status_code=400)
     resp = await get_result(job_id, db_session)
+    if resp["status"] == JobStatus.NON_EXISTING:
+        raise HTTPException(status_code=404, detail=resp)
     if resp["status"] != "done":
         raise HTTPException(status_code=409, detail=resp)
     return resp

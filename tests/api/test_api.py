@@ -119,10 +119,10 @@ class TestResult:
         r = await client.get("/v1/jobs/not-a-uuid/result", headers=auth_headers)
         assert r.status_code == 400
 
-    async def test_unknown_job_returns_409(self, client, auth_headers):
-        # job нет → status != "done" → 409
+    async def test_unknown_job_returns_404(self, client, auth_headers):
+        # job нет → NON_EXISTING → 404 (консистентно с /status и PATCH /result)
         r = await client.get(f"/v1/jobs/{uuid4()}/result", headers=auth_headers)
-        assert r.status_code == 409
+        assert r.status_code == 404
 
     async def test_queued_job_returns_409(self, client, auth_headers):
         job_id = await _create_job(client, auth_headers)
