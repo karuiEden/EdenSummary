@@ -1,3 +1,5 @@
+"""Async SQLAlchemy engine and session factory. NullPool because connections must
+not be shared across event loops (each Celery task runs its own asyncio.run)."""
 from functools import lru_cache
 
 from sqlalchemy import NullPool
@@ -17,14 +19,16 @@ def _get_session_factory():
 
 
 def engine():
+    """The cached process-wide async engine."""
     return _get_engine()
 
 
 def AsyncLocalSession():
-    # Returns AsyncSession — usable as `async with AsyncLocalSession() as session:`
+    """A new AsyncSession; use as `async with AsyncLocalSession() as session:`."""
     return _get_session_factory()()
 
 
 async def get_session():
+    """FastAPI dependency yielding a request-scoped session."""
     async with _get_session_factory()() as session:
         yield session

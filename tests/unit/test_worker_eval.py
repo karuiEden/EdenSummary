@@ -100,7 +100,7 @@ class TestEvaluateNeverFails:
 
 
 class TestCalibrationLabels:
-    # Q3: the judge score is joined to each edit at fit time (not snapshotted),
+    # the judge score is joined to each edit at fit time (not snapshotted),
     # so edits whose field was never scored must be dropped, not zero-filled.
     def test_joins_score_by_field_and_skips_unscored_job(self):
         edits = [

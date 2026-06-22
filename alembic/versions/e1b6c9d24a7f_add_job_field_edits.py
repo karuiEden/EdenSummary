@@ -1,4 +1,4 @@
-"""add job_field_edits table for Q3 edit-calibration labels
+"""add job_field_edits table for edit-calibration labels
 
 Revision ID: e1b6c9d24a7f
 Revises: d9a3e7c40f12

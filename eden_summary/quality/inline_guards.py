@@ -21,7 +21,7 @@ class QualityFlag:
     """A single quality concern detected by an inline guard. Advisory only —
     flags are recorded on the job, they never block or fail delivery."""
     kind: str       # machine-readable category, e.g. 'ungrounded_number'
-    severity: str   # 'warning' for now (all Tier 1 checks are advisory)
+    severity: str   # 'warning' for now (all inline checks are advisory)
     detail: str     # human-readable explanation
     value: str      # the offending surface string from the summary
 
@@ -79,9 +79,9 @@ def _is_grounded(core: str, transcript_no_commas: str) -> bool:
 
 def _check_numbers(summary_text: str, transcript: str) -> list[QualityFlag]:
     """Flag numbers present in the summary but absent from the transcript —
-    candidate fabrications (the −4 case under I-CALM). The reverse (a number in
-    the transcript missing from the summary) is NOT flagged: omission scores 0,
-    and recall is the summarizer's job, not this guard's.
+    candidate fabrications. The reverse (a number in the transcript missing from
+    the summary) is NOT flagged: omission scores 0, and recall is the summarizer's
+    job, not this guard's.
 
     The transcript is first run through spoken_to_digits (lightweight ITN):
     speech transcripts spell numbers out ('twenty five euros') while summaries
@@ -109,7 +109,7 @@ _NUMBERS = 'numbers'
 
 def run_inline_guards(summary: Summary, transcript: str,
                       language: str | None = None) -> InlineGuardResult:
-    """Run all Tier 1 inline guards over a finished summary. Fast (<100ms),
+    """Run all inline guards over a finished summary. Fast (<100ms),
     deterministic, advisory. Never raises: on any internal error it logs and
     returns an empty result with no checks recorded, so a guard failure can
     never fail an otherwise-good job. Grounding is checked against the summary

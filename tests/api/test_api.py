@@ -6,7 +6,7 @@ from uuid import uuid4
 from eden_summary.core.models import Job
 
 
-# минимальный «аудио»-payload; реальная проверка формата замокана через check_file
+# minimal "audio" payload; the real format check is mocked via check_file
 _FAKE_AUDIO = b"\xff\xfb\x90\x00" + b"\x00" * 64
 
 
@@ -77,7 +77,7 @@ class TestCreateJob:
         body = r.json()
         assert body["status"] == "queued"
         assert "job_id" in body
-        task.delay.assert_called_once_with(body["job_id"])  # задача поставлена в очередь
+        task.delay.assert_called_once_with(body["job_id"])  # task enqueued
 
     async def test_valid_file_with_emails(self, client, auth_headers):
         job_id = await _create_job(
@@ -120,14 +120,14 @@ class TestResult:
         assert r.status_code == 400
 
     async def test_unknown_job_returns_404(self, client, auth_headers):
-        # job нет → NON_EXISTING → 404 (консистентно с /status и PATCH /result)
+        # no job → NON_EXISTING → 404 (consistent with /status and PATCH /result)
         r = await client.get(f"/v1/jobs/{uuid4()}/result", headers=auth_headers)
         assert r.status_code == 404
 
     async def test_queued_job_returns_409(self, client, auth_headers):
         job_id = await _create_job(client, auth_headers)
         r = await client.get(f"/v1/jobs/{job_id}/result", headers=auth_headers)
-        assert r.status_code == 409  # ещё не готов
+        assert r.status_code == 409  # not ready yet
 
     async def test_done_job_returns_summary(self, client, auth_headers, db_session):
         job_id = str(uuid4())
@@ -143,7 +143,7 @@ class TestResult:
                 warning=None,
             ))
 
-        summary_text = "# Meeting Summary\n\nДоговорились созвониться в пятницу."
+        summary_text = "# Meeting Summary\n\nAgreed to have a call on Friday."
 
         def _fake_download(s3_path, local_path):
             with open(local_path, "w", encoding="UTF-8") as f:

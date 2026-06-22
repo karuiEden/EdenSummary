@@ -1,4 +1,4 @@
-"""Q4 SummQ QA-consistency. No real meeting-edit data exists yet — these are
+"""SummQ QA-consistency. No real meeting-edit data exists yet — these are
 synthetic, but the checks are NOT by-construction: the deterministic compare is
 exercised on the exact failure mode the metric exists to catch (a fabricated
 number must read as inconsistent), and the two-call scorer is driven with mocked
@@ -66,8 +66,8 @@ class TestHasClaims:
         assert _has_claims(_summary(decisions=["", "   "])) is False
 
     def test_placeholder_only_dict_does_not_count(self):
-        # _render_item collapses a placeholder-only dict to '' (same as the Tier-2
-        # judge's _collect_claims), so it is not a checkable claim
+        # _render_item collapses a placeholder-only dict to '' (same as the
+        # claim judge's _collect_claims), so it is not a checkable claim
         assert _has_claims(_summary(action_items=[{"who": "unspecified"}])) is False
 
     def test_real_item_counts(self):

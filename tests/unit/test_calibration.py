@@ -1,6 +1,6 @@
-"""Q3 calibration math. No real edit data exists yet (same as Tier-2 / Russian
-ITN) — these are synthetic. The checks are deliberately NOT by-construction:
-monotonicity over a grid, hand-computed PAV pooling, and degenerate fallbacks."""
+"""Edit-calibration math. No real edit data exists yet — these are synthetic. The
+checks are deliberately NOT by-construction: monotonicity over a grid,
+hand-computed PAV pooling, and degenerate fallbacks."""
 from eden_summary.quality.calibration import Calibration, fit_calibration
 
 

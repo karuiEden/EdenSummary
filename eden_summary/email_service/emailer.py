@@ -1,3 +1,4 @@
+"""SMTP delivery of the finished summary."""
 import smtplib
 from email.message import EmailMessage
 from typing import List
@@ -6,6 +7,8 @@ from eden_summary.core import SMTPConfig, get_smtp_cfg
 
 
 def send_email(recipients: List[str], subject: str, body: str):
+    """Send the summary to all recipients over STARTTLS. A no-op when recipients is
+    empty — a job may run without any address, and the result stays fetchable by id."""
     if not recipients:
         return
     config: SMTPConfig = get_smtp_cfg()

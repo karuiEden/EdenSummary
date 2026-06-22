@@ -1,5 +1,5 @@
-"""Q3 edit-calibration: map a Tier-2 judge field score to P(edit) — the
-probability that a human will correct that field.
+"""Edit calibration: map a judge field score to P(edit) — the probability that a
+human will correct that field.
 
 Pure functions, no sklearn/numpy. The judge score is a faithfulness signal in
 [0, 1]; we want an actionable probability of human editing. We expect P(edit) to
@@ -7,13 +7,10 @@ be NON-INCREASING in the judge score (more faithful → less editing), so we fit
 the risk feature t = 1 - score, where the relationship is non-decreasing, and map
 back in `predict`.
 
-Finite-Calibration Regime Map: with few labels a full isotonic fit overfits the
-noise, so below `_REGIME_THRESHOLD` we use a 2-parameter logistic (Platt-style,
-monotone) and only switch to isotonic (PAV) once there is enough data. Degenerate
-inputs (no labels, a single class) fall back to a base rate.
-
-v1 is compute-and-log only: there is NO live apply-path. Until real user edits
-exist, every fit here is on synthetic data.
+Regime selection: with few labels a full isotonic fit overfits the noise, so below
+`_REGIME_THRESHOLD` we use a 2-parameter logistic (Platt-style, monotone) and only
+switch to isotonic (PAV) once there is enough data. Degenerate inputs (no labels, a
+single class) fall back to a base rate.
 """
 import logging
 import math

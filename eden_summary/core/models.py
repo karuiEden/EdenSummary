@@ -1,3 +1,4 @@
+"""SQLAlchemy ORM models: the Job record and the per-field summary-edit labels."""
 from datetime import datetime
 
 from sqlalchemy import (
@@ -12,6 +13,9 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 class Job(Base):
+    """A summarization job and its lifecycle: status, recipient emails, S3 artifact
+    keys, and the advisory quality signals (inline flags + async evals). Indexed on
+    (status, updated_at) for the reaper's stale-job scan."""
     __tablename__ = "jobs"
     __table_args__ = (
         Index('ix_jobs_status_updated_at', 'status', 'updated_at'),
@@ -30,14 +34,14 @@ class Job(Base):
 
 
 class JobFieldEdit(Base):
-    """One user correction of a single summary field (Q3 calibration label).
+    """One user correction of a single summary field (a calibration label).
 
     A PATCH /result is treated as a review event: every judged field gets a row
     with `edited` = whether the user changed it. Unchanged fields are genuine
     negatives — that is how we manufacture 0-labels without guessing whether the
     user looked at the result. The judge score is intentionally NOT stored here:
-    Tier-2 eval is async/post-terminal and may finish after the edit, so a
-    snapshot would be null-biased toward fast editors. It is joined from
+    the faithfulness eval is async/post-terminal and may finish after the edit, so
+    a snapshot would be null-biased toward fast editors. It is joined from
     jobs.quality_eval.field_scores at calibration (fit) time instead.
 
     Repeat PATCHes upsert on (job_id, field) — last edit wins, no double-counting.

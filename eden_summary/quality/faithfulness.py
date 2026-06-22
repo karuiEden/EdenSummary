@@ -10,9 +10,9 @@ from eden_summary.summarize.summarize import (
 
 logger = logging.getLogger(__name__)
 
-# Fields verified in this order. DIAL-SUMMER: hallucinations cluster at the END of
-# generation, so 'risks' (produced last) are the least trustworthy and are graded
-# first while the judge's attention is freshest.
+# Fields verified in this order. Hallucinations cluster at the END of generation,
+# so 'risks' (produced last) are the least trustworthy and are graded first while
+# the judge's attention is freshest.
 _FIELD_ORDER = ('risks', 'decisions', 'action_items', 'tldr')
 
 _VERDICTS = {'supported', 'partial', 'unsupported'}
@@ -112,10 +112,10 @@ def _scores(verdicts: list[ClaimVerdict]) -> tuple[float | None, dict[str, float
 
 def judge_faithfulness(summary: Summary, transcript: str) -> JudgeResult:
     """Grade every summary claim against the transcript in ONE judge LLM call
-    (summarizer ≠ judge, no ensembles). Returns per-claim verdicts plus overall
-    and per-field scores. Skips (evaluated=False) when there are no claims or the
-    transcript exceeds the judge token budget. Language-agnostic — the LLM judge
-    handles any language, unlike the Tier-1 regex guard."""
+    (separate judge model). Returns per-claim verdicts plus overall and per-field
+    scores. Skips (evaluated=False) when there are no claims or the transcript
+    exceeds the judge token budget. Language-agnostic — the LLM judge handles any
+    language, unlike the inline regex guard."""
     config: LLMConfig = get_llm_cfg()
     claims = _collect_claims(summary)
     if not claims:
@@ -134,10 +134,9 @@ def judge_faithfulness(summary: Summary, transcript: str) -> JudgeResult:
     ])
     parsed = _parse_json(content)
 
-    # v1: assumes the judge echoes integer ids matching our enumeration. A model
-    # that emits string ids ("0") or drops the array → every claim falls through
-    # to the unsupported default below (a silent all-flag result). Acceptable for
-    # an advisory v1, but harden this when swapping judge models via OpenRouter.
+    # Assumes the judge echoes integer ids matching our enumeration. A model that
+    # emits string ids ("0") or drops the array → every claim falls through to the
+    # unsupported default below (a silent all-flag result), an advisory default.
     by_id = {}
     for entry in parsed.get('claims', []):
         if isinstance(entry, dict) and 'id' in entry:

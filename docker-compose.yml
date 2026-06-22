@@ -35,7 +35,7 @@ services:
          condition: service_completed_successfully
       createbuckets:
         condition: service_completed_successfully
-    command: uv run --no-sync celery -A eden_summary.worker.worker worker --loglevel=info -E -B
+    command: uv run --no-sync celery -A eden_summary.worker.worker worker --loglevel=info -E -B --schedule=/tmp/celerybeat-schedule
     env_file:
       - .env
     volumes:

@@ -1,3 +1,6 @@
+"""Job persistence and the operations behind the API: create a job and upload its
+source, read status/result, apply field updates, and record summary edits as
+calibration labels. Owns the JobStatus enum."""
 import asyncio
 import json
 import logging
@@ -19,7 +22,7 @@ from .models import Job, JobFieldEdit
 
 logger = logging.getLogger(__name__)
 
-# Summary fields graded by the Tier-2 judge — mirrors faithfulness._FIELD_ORDER.
+# Summary fields graded by the faithfulness judge — mirrors faithfulness._FIELD_ORDER.
 # Kept local to avoid a core -> quality import cycle (quality imports from core).
 # Only these get edit rows: each must have a quality_eval.field_scores entry to
 # join at calibration time; the title is a label, not a judged claim.
@@ -27,6 +30,9 @@ _EDIT_FIELDS = ('risks', 'decisions', 'action_items', 'tldr')
 
 
 class JobStatus(StrEnum):
+    """Job lifecycle states: QUEUED/ASR_RUNNING/SUMMARY_RUNNING are active,
+    DONE/FAILED/EMAIL_FAILED are terminal, and NON_EXISTING is a sentinel for an
+    unknown id (never stored)."""
     QUEUED = "queued"
     ASR_RUNNING = "asr_running"
     SUMMARY_RUNNING = "summary_running"
@@ -36,6 +42,8 @@ class JobStatus(StrEnum):
     EMAIL_FAILED = 'email_failed'
 
 async def create_job(file: UploadFile, emails: List[str] | None, db_session: AsyncSession):
+    """Create a QUEUED job row and upload the source file to S3. On any failure
+    returns a FAILED status dict instead of raising (the API maps it to 507)."""
     job_id: str = str(uuid4())
     file_ext: str = Path(str(file.filename)).suffix.lower()
     source_path = f"{job_id}/source{file_ext}"
@@ -63,6 +71,7 @@ async def create_job(file: UploadFile, emails: List[str] | None, db_session: Asy
     return {"status": JobStatus.QUEUED, "job_id": job_id}
 
 async def get_status(job_id: str, db_session: AsyncSession):
+    """Return {job_id, status}, or a NON_EXISTING status when the job is unknown."""
     async with db_session.begin():
         stmt = select(Job).where(Job.id == job_id)
         result = await db_session.execute(stmt)
@@ -73,6 +82,10 @@ async def get_status(job_id: str, db_session: AsyncSession):
             return {"job_id": job_id, "status": job.status}
 
 async def get_result(job_id: str, db_session: AsyncSession):
+    """Return a finished job's text + structured summary and the three quality
+    signals. NON_EXISTING when unknown; the bare status when not yet done. The
+    quality_eval/summq_eval signals are populated asynchronously after DONE, so they
+    may read null on the first fetches."""
     async with db_session.begin():
         stmt = select(Job).where(Job.id == job_id)
         result = await db_session.execute(stmt)
@@ -91,16 +104,16 @@ async def get_result(job_id: str, db_session: AsyncSession):
         except Exception:
             return {"job_id": job_id, "status": JobStatus.FAILED, "error": "Internal server error"}
     # Also surface the structured summary so a client can edit it field-by-field
-    # and submit corrections via PATCH /result (Q3). Best-effort: older jobs have
-    # no summary_json artifact, and a broken one must not break the text result.
+    # and submit corrections via PATCH /result. Best-effort: older jobs have no
+    # summary_json artifact, and a broken one must not break the text result.
     structured = await _load_structured_summary(job.artifacts)
     return {
         "job_id": job_id,
         "status": job.status,
         "summary": summary,
         "structured": structured,
-        # Quality signals (advisory). quality_flags (Tier-1 inline) is present as
-        # soon as the job is done. quality_eval (Tier-2 faithfulness) and summq_eval
+        # Quality signals (advisory). quality_flags (inline guards) is present as
+        # soon as the job is done. quality_eval (faithfulness) and summq_eval
         # (SummQ consistency) are produced by post-terminal async tasks, so they read
         # null on the first fetch(es) and populate seconds-to-minutes later — re-poll.
         "quality_flags": job.quality_flags,
@@ -128,6 +141,8 @@ async def _load_structured_summary(artifacts: dict) -> dict | None:
 
 
 async def update_job(job_id: str, session: AsyncSession, **fields):
+    """Apply keyword field updates to a job in a single transaction. Raises if the
+    job is missing."""
     async with session.begin():
         stmt = select(Job).where(Job.id == job_id)
         result = await session.execute(stmt)
@@ -140,7 +155,7 @@ async def update_job(job_id: str, session: AsyncSession, **fields):
 
 def _canon(value: object) -> str:
     """Canonical JSON for stable equality: dict key order doesn't matter, list
-    order does (a reorder counts as an edit — acceptable for a v1 edit signal),
+    order does (a reorder counts as an edit — acceptable for this edit signal),
     and surface whitespace inside strings still matters."""
     return json.dumps(value, sort_keys=True, ensure_ascii=False)
 
@@ -163,8 +178,8 @@ def _diff_fields(stored: dict, submitted: dict) -> list[dict]:
 
 
 async def record_result_edits(job_id: str, submitted: dict, db_session: AsyncSession):
-    """Record a user's correction of a DONE job's summary as Q3 calibration
-    labels. A PATCH is one review event: every judged field is written (changed →
+    """Record a user's correction of a DONE job's summary as calibration labels.
+    A PATCH is one review event: every judged field is written (changed →
     edited=True, untouched → genuine negative). Upserts on (job_id, field) so a
     repeat PATCH overwrites — last edit wins, no double-counting. Does NOT touch
     the stored summary_json (it is the immutable diff baseline the judge scored)."""

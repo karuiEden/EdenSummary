@@ -30,7 +30,7 @@ class TestParseJson:
 
 class TestEnsureList:
     def test_wraps_bare_string(self):
-        # LLM иногда отдаёт строку вместо списка — её надо обернуть
+        # the LLM sometimes returns a bare string instead of a list — wrap it
         assert _ensure_list("single") == ["single"]
 
     def test_passes_list_through(self):
@@ -69,7 +69,7 @@ class TestSummaryToText:
         assert "Риски" not in text
 
     def test_title_is_not_rendered(self):
-        # Документируем текущее поведение: title в to_text() не попадает
+        # documents current behaviour: the title is not rendered by to_text()
         s = Summary(title="UNIQUE_TITLE", tldr=["p"], decisions=[], action_items=[], risks=[])
         assert "UNIQUE_TITLE" not in s.to_text()
 
@@ -92,7 +92,7 @@ class TestSummaryToText:
     def test_to_text_unknown_lang_falls_back_to_default(self):
         s = self._full()
         text = s.to_text('zh')
-        # неизвестный язык → DEFAULT_LOCALE ('ru')
+        # unknown language → DEFAULT_LOCALE ('ru')
         assert 'Решения' in text
 
     def test_to_text_none_lang_falls_back_to_default(self):
@@ -101,8 +101,8 @@ class TestSummaryToText:
 
 
 class TestStructuredActionItems:
-    # LLM возвращает action_items словарями {task, who, deadline} — to_text должен
-    # рендерить их в читаемую строку, отбрасывая плейсхолдеры ('unspecified' и т.п.)
+    # the LLM returns action_items as dicts {task, who, deadline} — to_text must
+    # render them into a readable line, dropping placeholders ('unspecified', etc.)
     def _with_actions(self, action_items):
         return Summary(title="T", tldr=[], decisions=[],
                        action_items=action_items, risks=[])
@@ -136,7 +136,7 @@ class TestStructuredActionItems:
 
 
 class TestExtractNumbers:
-    # реальные кейсы из транскрипта AMI IS1000a
+    # real cases from the AMI IS1000a transcript
     def test_currency_word(self):
         assert _extract_numbers("selling price will be about 25 euros each") == ["25 euros"]
 
@@ -159,7 +159,7 @@ class TestExtractNumbers:
         assert _extract_numbers("1,000 units by 10:30") == ["1,000", "10:30"]
 
     def test_decimal_not_split_from_currency(self):
-        # "12.50 euros" — один факт, не "12.50" + "12.50 euros"
+        # "12.50 euros" is one fact, not "12.50" + "12.50 euros"
         assert _extract_numbers("12.50 euros") == ["12.50 euros"]
 
     def test_dedup_preserves_first(self):
@@ -173,7 +173,7 @@ class TestExtractNumbers:
 
 
 class TestExtractNumbersRussian:
-    # русские форматы для inline-гарда (Q2 Tier 1) — additive к английским паттернам
+    # Russian formats for the inline guard — additive to the English patterns
     def test_currency_euro(self):
         assert _extract_numbers("цена будет 25 евро за штуку") == ["25 евро"]
 
@@ -194,8 +194,7 @@ class TestExtractNumbersRussian:
 
 
 class TestExtractNumbersParked:
-    # _extract_numbers оставлен как заготовка,
-    # но НЕ должен попадать в промпты — проводка anchoring откачена.
+    # _extract_numbers is read-only here and must NOT be injected into prompts.
     @patch("eden_summary.summarize.summarize.get_llm_cfg")
     @patch("eden_summary.summarize.summarize.completion")
     def test_chunk_prompt_has_no_numeric_anchoring(self, mock_completion, mock_cfg):
@@ -270,7 +269,7 @@ class TestJsonMode:
 class TestSummarizeChunkRetry:
 
     @patch(
-        "eden_summary.summarize.summarize.time.sleep")  # не ждать в тесте
+        "eden_summary.summarize.summarize.time.sleep")  # don't sleep in the test
     @patch("eden_summary.summarize.summarize.get_llm_cfg")
     @patch("eden_summary.summarize.summarize.completion")
     def test_summarize_chunk_retries_then_succeeds(self, mock_completion, mock_cfg, _sleep):

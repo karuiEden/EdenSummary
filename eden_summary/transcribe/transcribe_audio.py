@@ -1,3 +1,6 @@
+"""ASR adapter: transcribe audio via the configured OpenAI-compatible provider
+(splitting long inputs), normalize the detected language to BCP-47, and chunk the
+transcript for map-reduce summarization."""
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +27,7 @@ class Transcription:
     language: str | None
 
 def _to_bcp47(provider_lang: str | None) -> str | None:
+    """Map a provider language name or code to a BCP-47 primary subtag, or None."""
     if not provider_lang:
         return None
     return _BCP47_MAP.get(provider_lang.lower())
@@ -56,8 +60,7 @@ def transcribe(audio_path: Path, language: str | None) -> Transcription:
     request — behaviour unchanged. Longer ones are cut into asr_chunk_seconds pieces,
     transcribed sequentially (Groq TPM), and the segment texts concatenated in order.
     Timestamps are not offset: Transcription carries text only. Boundary cuts can
-    clip a word at a seam — a known limitation; VAD/silence-aware split is the future
-    upgrade."""
+    clip a word at a seam — a known limitation."""
     config: WhisperConfig = get_whisper_cfg()
     if get_duration(audio_path) <= config.asr_chunk_seconds:
         return _transcribe_file(audio_path, language)
@@ -75,6 +78,8 @@ def transcribe(audio_path: Path, language: str | None) -> Transcription:
 
 
 def chunk_segments(segments: List[str]) -> List[str]:
+    """Group transcript segments into <=chunk_max_chars chunks, carrying ~chunk_overlap_chars
+    of trailing segments into the next chunk so facts on a boundary are not lost."""
     cfg = get_whisper_cfg()
     max_chars = cfg.chunk_max_chars
     overlap_chars = cfg.chunk_overlap_chars

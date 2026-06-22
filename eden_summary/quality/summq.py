@@ -1,19 +1,16 @@
-"""Q4 SummQ: QA-based consistency check.
+"""SummQ: QA-based consistency check.
 
-A deliberately INDEPENDENT signal to the Tier-2 claim judge (faithfulness.py).
-The claim judge asks "does the transcript support this claim?"; SummQ instead
-turns the summary into a short fact-check quiz, answers each question from the
-transcript *blind* (never shown the summary's own answer), then compares the two
-answers deterministically. Answering blind is the whole point — handing the model
-the summary's answer would just rebuild the claim judge with confirmation bias.
+A deliberately INDEPENDENT signal to the claim judge (faithfulness.py). The claim
+judge asks "does the transcript support this claim?"; SummQ instead turns the
+summary into a short fact-check quiz, answers each question from the transcript
+*blind* (never shown the summary's own answer), then compares the two answers
+deterministically. Answering blind is the whole point — handing the model the
+summary's answer would just rebuild the claim judge with confirmation bias.
 Disagreement (or an unanswerable question) means the summary asserts something the
-transcript does not, i.e. a faithfulness gap caught from a different angle (QAGS /
-QuestEval recipe).
+transcript does not, i.e. a faithfulness gap caught from a different angle.
 
-v1 is compute-and-log only: the consistency score and a below_threshold flag are
-stored on the job, but no regeneration is applied. The regeneration loop is
-deferred — at temperature 0 a naive re-summarization is a near no-op, so it needs
-a repair prompt plus real data before it can be validated.
+Stores the consistency score and a below_threshold flag on the job; the opt-in
+regeneration loop (quality/regen.py) consumes them.
 """
 import logging
 import re
@@ -30,7 +27,7 @@ from eden_summary.summarize.summarize import (
 logger = logging.getLogger(__name__)
 
 # Fields quizzed. Title is excluded (a label, not a checkable fact), same as the
-# Tier-2 judge. Order is informational only — SummQ scores are pooled, not ranked.
+# claim judge. Order is informational only — SummQ scores are pooled, not ranked.
 _QUIZ_FIELDS = ('decisions', 'action_items', 'risks', 'tldr')
 
 GEN_SYSTEM_PROMPT = """You turn a meeting summary into a short fact-check quiz. For \
@@ -82,8 +79,8 @@ class SummQResult:
     threshold: float = 0.7
 
     def to_metadata(self) -> dict:
-        # below_threshold is recorded even with no apply-path so the deferred
-        # regeneration decision has data once real summaries accumulate.
+        # below_threshold is recorded even when no regeneration runs, so the flag
+        # is available to the opt-in regeneration loop and to offline analysis.
         below = self.consistency_score is not None and self.consistency_score < self.threshold
         return {
             'evaluated': self.evaluated,
@@ -157,8 +154,8 @@ def _answer_match(summary_answer: str, transcript_answer: str, threshold: float 
 # ---- LLM plumbing ------------------------------------------------------------
 
 def _summq_complete(messages: list[dict]) -> str:
-    """One judge LLM call. Uses the same model/credentials as the Tier-2 judge
-    (summarizer ≠ judge); SummQ is just a second, independent use of it."""
+    """One judge LLM call. Uses the same model/credentials as the claim judge;
+    SummQ is a second, independent use of it."""
     config: LLMConfig = get_llm_cfg()
     kwargs: dict = dict(
         model=config.effective_judge_model,
@@ -211,9 +208,9 @@ def _answer_from_transcript(transcript: str, pairs: list[tuple[str, str]]) -> di
         {'role': 'user', 'content': ANSWER_USER_PROMPT.format(transcript=transcript, questions=numbered)},
     ])
     parsed = _parse_json(content)
-    # v1: assumes the model echoes integer ids matching our enumeration. A dropped
-    # or string-keyed entry falls through to '' below (NOT_STATED → inconsistent),
-    # a conservative default. Harden when swapping judge models via OpenRouter.
+    # Assumes the model echoes integer ids matching our enumeration. A dropped or
+    # string-keyed entry falls through to '' below (NOT_STATED → inconsistent), a
+    # conservative default.
     answers: dict[int, str] = {}
     for entry in parsed.get('answers', []):
         if isinstance(entry, dict) and isinstance(entry.get('id'), int):

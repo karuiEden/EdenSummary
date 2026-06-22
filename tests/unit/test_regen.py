@@ -1,6 +1,6 @@
-"""§6.6 Regeneration (keep-if-better). LLM calls are mocked — these verify the
-control logic the feature lives or dies on: the trigger policies, keep-if-better in
-both directions, the repair-prompt wiring, and the worker's single-source-of-truth
+"""Regeneration (keep-if-better). LLM calls are mocked — these verify the control
+logic the feature lives or dies on: the trigger policies, keep-if-better in both
+directions, the repair-prompt wiring, and the worker's single-source-of-truth
 post-terminal skip matrix."""
 import json
 from types import SimpleNamespace

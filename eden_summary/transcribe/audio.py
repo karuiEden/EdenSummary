@@ -1,3 +1,4 @@
+"""ffmpeg/ffprobe audio helpers, each with a hard subprocess timeout."""
 import subprocess
 from pathlib import Path
 from typing import List
@@ -6,6 +7,7 @@ _FFMPEG_TIMEOUT = 1800
 _FFPROBE_TIMEOUT = 30
 
 def convert_to_wav(input_path: Path, output_path: Path) -> None:
+    """Transcode any input to 16 kHz mono WAV (the ASR input format)."""
     subprocess.run(
         ["ffmpeg", "-i", str(input_path), "-ar", "16000", "-ac", "1", "-y", str(output_path)], capture_output=True,
         timeout=_FFMPEG_TIMEOUT,
@@ -13,6 +15,7 @@ def convert_to_wav(input_path: Path, output_path: Path) -> None:
     )
 
 def get_duration(path: Path) -> float:
+    """Return the audio duration in seconds via ffprobe."""
     res = subprocess.run(
         ["ffprobe", '-i', str(path), '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0'],
         capture_output=True, check=True,
@@ -22,6 +25,7 @@ def get_duration(path: Path) -> float:
     return duration
 
 def is_audio(path: str) -> bool:
+    """True if ffprobe finds an audio stream in the file (used to validate uploads)."""
     res = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", path],
         capture_output=True,

@@ -11,8 +11,8 @@ import re
 # тысяча/миллион/миллиард) are left as text, which is exactly what _digit_core
 # expects ('fifteen million' -> '15 million' -> core '15').
 #
-# Precision direction (important, and easy to get backwards): converting a spoken
-# number REDUCES false positives versus no normalization. But a coverage GAP — a
+# Precision direction: converting a spoken number REDUCES false positives versus
+# no normalization. But a coverage GAP — a
 # salient number whose spoken form we fail to convert — leaves its digits absent
 # from the transcript, so a faithful summary that writes it in digits gets flagged.
 # Gaps are therefore FALSE-POSITIVE sources, not false negatives; residual FP is

@@ -41,7 +41,7 @@ class TestCheckId:
 
 
 class TestCheckFile:
-    """Двухслойная валидация: magic-категория + ffprobe (is_audio)."""
+    """Two-layer validation: magic category + ffprobe (is_audio)."""
 
     @pytest.mark.asyncio
     async def test_accepts_audio(self, monkeypatch):

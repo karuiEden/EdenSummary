@@ -1,4 +1,4 @@
-"""add jobs.summq_eval column for Q4 SummQ QA-consistency check
+"""add jobs.summq_eval column for SummQ QA-consistency check
 
 Revision ID: f2c7d019b3e8
 Revises: e1b6c9d24a7f

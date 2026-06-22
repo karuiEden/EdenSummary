@@ -1,3 +1,6 @@
+"""Celery worker: the process_job task that runs the pipeline, the post-terminal
+quality-eval tasks (faithfulness, SummQ), the monthly edit-calibration refit, and a
+beat-scheduled reaper that fails jobs stuck past their staleness threshold."""
 import asyncio
 import json
 import logging
@@ -24,8 +27,8 @@ celery_app.conf.beat_schedule = {
         'task': 'eden_summary.worker.worker.reap_stale_jobs',
         'schedule': 300.0,
     },
-    # Q3: refit the judge_score -> P(edit) calibration from accumulated user
-    # edits. Monthly batch — compute-and-log only (no live apply-path yet).
+    # Refit the judge_score -> P(edit) calibration from accumulated user edits.
+    # Monthly batch — compute-and-log only.
     'calibrate-edit-scores': {
         'task': 'eden_summary.worker.worker.calibrate_edit_scores',
         'schedule': 2592000.0,  # ~30 days
@@ -41,6 +44,9 @@ _ACTIVE_STATUSES = [
 
 @celery_app.task(acks_late=True, reject_on_worker_lost=True, soft_time_limit=cfg.soft_timeout, time_limit=cfg.hard_timeout)
 def process_job(job_id: str, language: str | None = None):
+    """Celery entry point: run the pipeline for one job, then dispatch the
+    post-terminal quality evals. acks_late + reject_on_worker_lost requeue the job
+    if the worker dies mid-run (paired with the pipeline's idempotency guard)."""
     async def _run():
         async with AsyncLocalSession() as db_session:
             await pipeline.process_job(job_id, language, db_session)
@@ -53,7 +59,7 @@ async def _dispatch_post_terminal(job_id: str) -> None:
     stay out of the summarization hot path; each self-guards on status==DONE and is
     independent.
 
-    §6.6 single source of truth: regeneration computes and persists its metric
+    Single source of truth: regeneration computes and persists its metric
     in-pipeline, so re-running it post-terminal would overwrite the stored score with
     a non-deterministic re-eval. We therefore dispatch only the eval that is NOT
     already persisted. Keying off the persisted state (not the regen config flag) also
@@ -73,8 +79,8 @@ async def _dispatch_post_terminal(job_id: str) -> None:
 
 @celery_app.task
 def evaluate_summary(job_id: str):
-    """Async Tier-2 faithfulness eval. Strictly post-terminal and advisory: it
-    never changes job status and never fails the job — any error is logged and
+    """Async faithfulness eval. Strictly post-terminal and advisory: it never
+    changes job status and never fails the job — any error is logged and
     swallowed. Runs only when the job is DONE and the eval artifacts exist."""
     try:
         asyncio.run(_evaluate(job_id))
@@ -111,10 +117,10 @@ async def _evaluate(job_id: str) -> None:
 
 @celery_app.task
 def verify_summq(job_id: str):
-    """Q4 SummQ QA-consistency check. Post-terminal, advisory, never-fail — mirrors
+    """SummQ QA-consistency check. Post-terminal, advisory, never-fail — mirrors
     evaluate_summary and is independent of it. Quizzes the summary, answers blind
-    from the transcript, compares deterministically. Compute-and-log only: stores
-    the consistency score in jobs.summq_eval; no live regeneration yet."""
+    from the transcript, compares deterministically, and stores the consistency
+    score in jobs.summq_eval."""
     try:
         asyncio.run(_verify_summq(job_id))
     except Exception:
@@ -151,10 +157,10 @@ async def _verify_summq(job_id: str) -> None:
 
 @celery_app.task
 def calibrate_edit_scores():
-    """Q3 monthly batch: refit P(edit) from accumulated user edits and log it.
+    """Monthly batch: refit P(edit) from accumulated user edits and log it.
     Advisory and self-contained — never touches jobs. The judge score is joined
     from jobs.quality_eval at fit time (not snapshotted into the edit row), so
-    edits made before their async Tier-2 eval finished are still usable."""
+    edits made before their async faithfulness eval finished are still usable."""
     asyncio.run(_calibrate())
 
 
@@ -192,6 +198,9 @@ async def _calibrate() -> None:
 
 @celery_app.task
 def reap_stale_jobs():
+    """Beat task: fail jobs stuck in a non-terminal status past the staleness
+    threshold — the liveness backstop for a worker that died without updating
+    status, which the Celery time limit alone cannot catch."""
     asyncio.run(_reap())
 
 

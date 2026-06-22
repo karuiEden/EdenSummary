@@ -1,3 +1,5 @@
+"""S3/MinIO storage helpers (boto3) with per-call timeouts and retries. The client
+is built once and cached; paths are object keys within the configured bucket."""
 from functools import lru_cache
 from pathlib import Path
 
@@ -27,11 +29,13 @@ def _get_s3() -> tuple:
 
 
 def upload_file(local_path: str, key: str) -> None:
+    """Upload a local file to the bucket under `key`."""
     s3, bucket = _get_s3()
     s3.upload_file(local_path, bucket, key)
 
 
 def download_file(key: str, local_path: str) -> None:
+    """Download object `key` to `local_path`, creating parent dirs as needed."""
     Path(local_path).parent.mkdir(parents=True, exist_ok=True)
     s3, bucket = _get_s3()
     s3.download_file(bucket, key, local_path)

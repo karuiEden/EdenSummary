@@ -1,4 +1,4 @@
-"""Pure per-field diff that produces Q3 calibration labels. No DB/S3."""
+"""Pure per-field diff that produces calibration labels. No DB/S3."""
 from eden_summary.core.job_store import _EDIT_FIELDS, _diff_fields
 
 
@@ -35,7 +35,7 @@ class TestDiffFields:
         assert all(r['edited'] is False for r in rows)
 
     def test_reorder_counts_as_edit(self):
-        # documents the order-sensitive v1 choice
+        # documents the order-sensitive choice
         rows = _diff_fields(_summary(decisions=['d1', 'd2']),
                             _summary(decisions=['d2', 'd1']))
         assert _flags(rows)['decisions'] is True

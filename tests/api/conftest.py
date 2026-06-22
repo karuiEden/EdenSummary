@@ -12,7 +12,7 @@ from eden_summary.core.models import Base
 
 
 def _test_db_url() -> str:
-    # те же переменные, что и у приложения (DBConfig)
+    # same variables the app uses (DBConfig)
     return (
         f"postgresql+asyncpg://"
         f"{os.environ['DB_USERNAME']}:{os.environ['DB_PASSWORD']}"
@@ -23,7 +23,7 @@ def _test_db_url() -> str:
 
 @pytest.fixture(scope="session")
 async def test_engine():
-    # NullPool — как в db.py: соединения не переживают между event loop'ами
+    # NullPool — as in db.py: connections don't survive across event loops
     engine = create_async_engine(_test_db_url(), poolclass=NullPool, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)  # idempotent (checkfirst)
@@ -38,8 +38,8 @@ def session_factory(test_engine):
 
 @pytest.fixture(autouse=True)
 async def clean_jobs(test_engine):
-    # чистим таблицу ПЕРЕД каждым тестом — изоляция.
-    # CASCADE: job_field_edits ссылается на jobs (FK), TRUNCATE без него упадёт.
+    # truncate the table BEFORE each test — isolation.
+    # CASCADE: job_field_edits references jobs (FK), TRUNCATE without it would fail.
     async with test_engine.begin() as conn:
         await conn.execute(text("TRUNCATE TABLE jobs CASCADE"))
     yield
@@ -47,14 +47,14 @@ async def clean_jobs(test_engine):
 
 @pytest.fixture
 async def db_session(session_factory):
-    # для прямой подготовки данных в тесте (вставить готовый Job)
+    # for preparing data directly in a test (insert a ready-made Job)
     async with session_factory() as session:
         yield session
 
 
 @pytest.fixture
 async def client(session_factory):
-    # подменяем зависимость get_session на тестовую БД
+    # override the get_session dependency with the test DB
     async def _override():
         async with session_factory() as session:
             yield session

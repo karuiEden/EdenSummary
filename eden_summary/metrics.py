@@ -1,3 +1,5 @@
+"""Prometheus metrics: per-stage and total job latency, ASR processing ratio,
+inline-guard latency, terminal-status counts, and regeneration outcomes."""
 from prometheus_client import Counter, Histogram
 
 job_stage_seconds = Histogram(
@@ -25,7 +27,7 @@ job_terminal_total = Counter(
     ['status'],
 )
 
-# §6.6 Regeneration outcome: 'applied' (repaired kept), 'reverted' (repaired worse,
+# Regeneration outcome: 'applied' (repaired kept), 'reverted' (repaired worse,
 # original kept), 'skipped' (trigger did not fire). Lets us observe how often regen
 # fires and how often keep-if-better actually keeps the repaired version.
 summq_regen_total = Counter(

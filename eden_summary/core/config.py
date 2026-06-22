@@ -1,3 +1,6 @@
+"""Typed configuration loaded from the environment / .env via pydantic-settings,
+with cached accessors. One settings class per subsystem (LLM, Whisper/ASR, SMTP,
+Celery, DB, S3)."""
 import os
 from functools import lru_cache
 from typing import Literal
@@ -35,28 +38,26 @@ class LLMConfig(BaseSettings):
     max_workers: int = Field(default=5, validation_alias='LLM_MAX_WORKERS')
     single_pass_token_limit: int = Field(default=32000, validation_alias='LLM_SINGLE_PASS_TOKEN_LIMIT')
     json_mode: bool = Field(default=True, validation_alias='LLM_JSON_MODE')
-    # Tier-2 faithfulness judge. Separate model on purpose (summarizer ≠ judge):
-    # a non-summarizer model grades the summary against the transcript. judge_api_*
-    # are optional overrides (e.g. an OpenRouter endpoint); they fall back to the
+    # Faithfulness judge. Separate model on purpose (summarizer ≠ judge): a
+    # non-summarizer model grades the summary against the transcript. judge_api_*
+    # are optional overrides (e.g. a different endpoint); they fall back to the
     # main LLM credentials when unset.
     judge_enabled: bool = Field(default=True, validation_alias='LLM_JUDGE_ENABLED')
     judge_model: str | None = Field(default=None, validation_alias='LLM_JUDGE_MODEL')
     judge_api_base: str | None = Field(default=None, validation_alias='LLM_JUDGE_API_BASE')
     judge_api_key: str | None = Field(default=None, validation_alias='LLM_JUDGE_API_KEY')
     judge_token_limit: int = Field(default=32000, validation_alias='LLM_JUDGE_TOKEN_LIMIT')
-    # Q4 SummQ: QA-based consistency check, an independent signal to the Tier-2
-    # claim judge (questions from the summary, answered blind from the transcript,
-    # compared deterministically). Reuses the judge model/credentials/token-limit.
-    # v1 is compute-and-log: below_threshold is recorded but no regeneration is
-    # applied yet.
+    # SummQ: QA-based consistency check, an independent signal to the claim judge
+    # (questions from the summary, answered blind from the transcript, compared
+    # deterministically). Reuses the judge model/credentials/token-limit.
     summq_enabled: bool = Field(default=True, validation_alias='LLM_SUMMQ_ENABLED')
     summq_consistency_threshold: float = Field(default=0.7, validation_alias='LLM_SUMMQ_THRESHOLD')
     summq_max_questions: int = Field(default=8, validation_alias='LLM_SUMMQ_MAX_QUESTIONS')
-    # §6.6 Regeneration (keep-if-better) — opt-in, off by default. When enabled, a
+    # Regeneration (keep-if-better) — opt-in, off by default. When enabled, a
     # summary that fails the consistency checks is repaired in-pipeline (before the
     # email) and the repaired version is kept only if it scores no worse. Trigger
     # policy: 'summq' = SummQ below_threshold; 'both' = SummQ below_threshold AND
-    # Tier-2 faithfulness < judge_faithfulness_threshold (two independent judges agree).
+    # faithfulness < judge_faithfulness_threshold (two independent judges agree).
     summq_regen_enabled: bool = Field(default=False, validation_alias='LLM_SUMMQ_REGEN')
     summq_regen_trigger: Literal['summq', 'both'] = Field(
         default='both', validation_alias='LLM_SUMMQ_REGEN_TRIGGER')

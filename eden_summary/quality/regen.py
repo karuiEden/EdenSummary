@@ -1,4 +1,4 @@
-"""§6.6 Regeneration (keep-if-better) — opt-in, off by default.
+"""Regeneration (keep-if-better) — opt-in, off by default.
 
 Closes the quality loop: when a finished summary fails the consistency checks,
 repair its unsupported claims and adopt the repaired version ONLY if it scores no
@@ -9,10 +9,10 @@ Returns the final summary plus the metrics to persist. Those metrics are the sin
 source of truth: the worker skips the corresponding post-terminal task for this job
 (re-running it would overwrite the score with a non-deterministic re-evaluation).
 
-Honest boundary: keep-if-better guarantees "not worse on the faithfulness metrics",
+Limitation: keep-if-better guarantees "not worse on the faithfulness metrics",
 not "not worse in quality" — SummQ builds its questions from the summary, so a score
 can be raised by deleting a claim. The repair prompt mitigates but does not remove
-this; hence the feature ships dark / opt-in.
+this, which is why the feature is off by default.
 """
 import logging
 
@@ -37,7 +37,7 @@ def _judge_low(judge: JudgeResult | None, threshold: float) -> bool:
 
 def _collect_issues(summq: SummQResult, judge: JudgeResult | None) -> list[str]:
     """Build the repair brief: failing SummQ questions plus (for the 'both' policy)
-    the Tier-2 claims the judge marked unsupported."""
+    the claims the judge marked unsupported."""
     issues: list[str] = []
     for item in summq.items:
         if not item.consistent:

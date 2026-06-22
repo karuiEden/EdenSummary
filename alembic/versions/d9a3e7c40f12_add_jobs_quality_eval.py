@@ -1,4 +1,4 @@
-"""add jobs.quality_eval column for Tier-2 faithfulness eval
+"""add jobs.quality_eval column for faithfulness eval
 
 Revision ID: d9a3e7c40f12
 Revises: c8f5a2b1d3e6

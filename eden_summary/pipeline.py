@@ -1,3 +1,7 @@
+"""Core job pipeline: preprocess audio → transcribe → summarize → (optional
+regeneration) → inline guards → persist artifacts → email. Each stage updates the
+job status; any failure drives the job to a terminal FAILED/EMAIL_FAILED state
+instead of raising out of the task."""
 import asyncio
 import json
 import logging
@@ -22,6 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 async def process_job(job_id: str, language: str | None, db_session: AsyncSession):
+    """Run a queued job end to end and drive it to a terminal status.
+
+    Idempotent: a job not in QUEUED state returns immediately (safe under Celery
+    redelivery). Intermediate artifacts (preprocessed audio, transcript, structured
+    summary) are persisted so the post-terminal async evals can reload them. The
+    email is sent in-pipeline, so the served/emailed summary already reflects any
+    regeneration."""
     logger.info('Job started', extra={"job_id": job_id})
     async with db_session.begin():
         stmt = select(Job).where(Job.id == job_id)
@@ -87,7 +98,7 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         await update_job(job_id, db_session, status=JobStatus.FAILED, error="LLM summarization failed")
         job_terminal_total.labels(status='failed').inc()
         return
-    # §6.6 Regeneration (keep-if-better) — opt-in, BEFORE persist/email so the served
+    # Regeneration (keep-if-better) — opt-in, BEFORE persist/email so the served
     # result is the chosen version. Never-fail: any error keeps the original summary.
     # When it runs, the metrics it computed are persisted below (single source of
     # truth) and the worker skips the matching post-terminal eval for this job.
@@ -99,7 +110,7 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         except Exception:
             logger.exception("Regeneration step failed; keeping original summary", extra={"job_id": job_id})
             regen_eval = {}
-    # Tier 1 inline quality guards: advisory, never fail the job.
+    # Inline quality guards: advisory, never fail the job.
     quality_flags: dict | None = None
     try:
         quality_start = time.monotonic()
@@ -116,8 +127,8 @@ async def process_job(job_id: str, language: str | None, db_session: AsyncSessio
         tmp.flush()
         upload_file(tmp.name, f'{job_id}/summary.txt')
     artifacts['summary'] = f'{job_id}/summary.txt'
-    # Persist the raw transcript and structured summary so the async Tier-2
-    # faithfulness eval (a separate process, after this job ends) can reload them.
+    # Persist the raw transcript and structured summary so the async faithfulness
+    # eval (a separate process, after this job ends) can reload them.
     for name, payload in (
         ('transcript', {'language': detected_lang, 'segments': segments}),
         ('summary_json', asdict(summary)),

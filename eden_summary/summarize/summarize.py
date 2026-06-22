@@ -1,3 +1,6 @@
+"""Transcript → structured Summary. Single-pass when the transcript fits the model
+context, map-reduce otherwise. Also exposes the numeric-fact extractor used by the
+inline quality guard and the repair_summary entry point used by regeneration."""
 import concurrent.futures
 import json
 import logging
@@ -35,11 +38,8 @@ def _extract_numbers(text: str) -> list[str]:
     decimals) as their exact surface strings, de-duplicated and in order of
     appearance.
 
-    Not used for prompt-side "numeric anchoring": injecting these with a hard
-    "use ONLY these values" constraint measurably hurt faithfulness. Now
-    consumed read-only by the Tier 1 inline
-    quality guard (eden_summary/quality) to flag summary numbers that are not
-    grounded in the transcript."""
+    Consumed read-only by the inline quality guard (eden_summary/quality) to flag
+    summary numbers that are not grounded in the transcript."""
     spans = []
     for pattern in _NUMBER_PATTERNS:
         for match in pattern.finditer(text):
@@ -139,6 +139,7 @@ _HEADERS: dict[str, dict[str, str]] = {
 
 
 def _primary_subtag(bcp47: str | None) -> str | None:
+    """The lowercased primary subtag of a BCP-47 tag ('ru-RU' -> 'ru'), or None."""
     if not bcp47:
         return None
     return bcp47.split('-')[0].lower()
@@ -180,6 +181,8 @@ def _render_item(item: object) -> str:
 
 @dataclass(frozen=True)
 class Summary:
+    """The structured meeting summary: a title plus four lists (tldr, decisions,
+    action_items, risks). Rendered to text per language by to_text()."""
     title: str
     tldr: List[str]
     decisions: List[str]
@@ -187,6 +190,9 @@ class Summary:
     risks: List[str]
 
     def to_text(self, lang: str | None = None) -> str:
+        """Render the summary as plain text with localized section headers (chosen by
+        BCP-47 language, falling back to the default locale). The title is omitted and
+        empty sections are skipped."""
         locale = _primary_subtag(lang) or _DEFAULT_LOCALE
         headers = _HEADERS.get(locale, _HEADERS[_DEFAULT_LOCALE])
         sections = []
@@ -202,6 +208,7 @@ class Summary:
         return "\n\n".join(sections)
 
 def _ensure_list(value: List[str] | str | None) -> list[str]:
+    """Coerce an LLM value to a list: wrap a bare string, pass a list through, else []."""
     if isinstance(value, str):
         return [value]
     if isinstance(value, list):
@@ -209,6 +216,7 @@ def _ensure_list(value: List[str] | str | None) -> list[str]:
     return []
 
 def _parse_json(text: str) -> dict:
+    """Extract and parse the first JSON object in `text` (LLMs often wrap it in prose)."""
     start = text.find('{')
     end = text.rfind('}')
     if start == -1 or end == -1:
@@ -216,6 +224,7 @@ def _parse_json(text: str) -> dict:
     return json.loads(text[start:end+1])
 
 def _dict_to_summary(summary_dict: dict) -> Summary:
+    """Build a Summary from a parsed JSON dict, filling missing fields with defaults."""
     return Summary(
         title=summary_dict.get('title', 'Meeting Summary'),
         tldr=_ensure_list(summary_dict.get('tldr', [])),
@@ -251,6 +260,8 @@ def _complete(messages: list[dict]) -> str:
     return str(response.choices[0].message.content)
 
 def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
+    """Summarize one transcript chunk into a partial {decisions, action_items, risks}
+    dict, retrying the LLM call on unparseable JSON (the map step)."""
     config: LLMConfig = get_llm_cfg()
     content = _complete([
         {'role': 'system', 'content': SYSTEM_PROMPT},
@@ -269,6 +280,8 @@ def summarize_chunk(chunk: str, _attempt: int = 0) -> dict:
 
 
 def build_summary(chunks: List[str], _attempt: int = 0) -> Summary:
+    """Map-reduce: summarize each chunk in parallel, then merge the partials into one
+    Summary, retrying the reduce call on unparseable JSON."""
     config: LLMConfig = get_llm_cfg()
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.max_workers) as executor:
         summary_chunks = list(executor.map(summarize_chunk, chunks))
@@ -354,10 +367,10 @@ Fix or remove only the flagged items; keep everything the transcript supports.
 
 
 def repair_summary(transcript: str, summary: Summary, issues: List[str]) -> Summary:
-    """§6.6 keep-if-better: rewrite a summary's flagged-unsupported claims against the
-    transcript, using the SUMMARIZER model (not the judge). Reuses the shared
-    completion / parse / build helpers. The prompt corrects or removes only the flagged
-    items and is instructed to preserve all transcript-supported content."""
+    """Rewrite a summary's flagged-unsupported claims against the transcript, using
+    the SUMMARIZER model (not the judge). Reuses the shared completion / parse /
+    build helpers. The prompt corrects or removes only the flagged items and is
+    instructed to preserve all transcript-supported content."""
     issues_text = '\n'.join(f'- {issue}' for issue in issues) if issues else '(none provided)'
     content = _complete([
         {'role': 'system', 'content': REPAIR_SYSTEM_PROMPT},
